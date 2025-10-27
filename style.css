@@ -1,0 +1,6 @@
+/* style.css - clean light theme */
+body { background:#f4f7fb; color:#222; font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+.card { border-radius:8px; }
+.btn-primary { background:#0d6efd; border-color:#0d6efd; }
+.navbar { border-bottom:1px solid rgba(0,0,0,0.05); }
+input, select { border-radius:6px; }
