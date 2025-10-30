@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     dashboard: document.getElementById('panel-dashboard'),
     inventory: document.getElementById('panel-inventory'),
     branches: document.getElementById('panel-branches'),
+    suppliers: document.getElementById('panel-suppliers'),
     accounts: document.getElementById('panel-accounts'),
     logs: document.getElementById('panel-logs'),
     pos: document.getElementById('panel-pos')
@@ -67,17 +68,39 @@ document.addEventListener('DOMContentLoaded', ()=>{
     Object.values(panels).forEach(p=>p && p.classList.add('d-none'));
     if(panels[name]) panels[name].classList.remove('d-none');
   }
-  ['dashboard','inventory','branches','accounts','logs','pos'].forEach(id=>{
+  ['dashboard','inventory','branches','suppliers','accounts','logs','pos'].forEach(id=>{
     const el = document.getElementById('menu-'+id);
     if(!el) return;
     el.addEventListener('click', ()=> showPanel(id));
     // ADDED: Default load action logs when logs panel is opened
     if (id === 'logs') el.addEventListener('click', loadActionLogs);
+    if (id === 'suppliers') el.addEventListener('click', loadSuppliers);
   });
 
   // CART
   window.CART = window.CART || [];
-  function addToCart(id,qty=1){ qty = parseInt(qty||1,10); const ex = CART.find(x=>x.id==id); if(ex) ex.qty += qty; else CART.push({id:parseInt(id,10), qty}); updateCartUI(); }
+  function addToCart(id, size, qty = 1) {
+    qty = parseInt(qty || 1, 10);
+    const ex = CART.find(x => x.id == id && x.size == size);
+    if (ex) {
+        ex.qty += qty;
+    } else {
+        CART.push({ id: parseInt(id, 10), size, qty });
+    }
+    updateCartUI();
+  }
+  function updateCart(id, size, newQty) {
+    const item = CART.find(x => x.id == id && x.size == size);
+    if (item) {
+        if (newQty > 0) {
+            item.qty = newQty;
+        } else {
+            CART = CART.filter(x => !(x.id == id && x.size == size));
+        }
+    }
+    updateCartUI();
+    renderCart();
+  }
   function updateCartUI(){ const count = CART.reduce((s,i)=>s+i.qty,0); const el = document.getElementById('cartCount'); if(el) el.textContent = count; }
 
   // Branch selects (populate and enforce staff behavior)
@@ -120,17 +143,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <div class="fw-bold">${escapeHtml(p.name)}</div>
               <div class="small text-muted">${escapeHtml(p.category||'')}</div>
               <div class="fw-semibold mt-1">₱${Number(p.price||0).toFixed(2)}</div>
-              <div class="mt-2 text-center">
-                <input type="number" min="1" value="1" class="form-control form-control-sm qty-for-${p.id}" style="width:80px;margin:0 auto;">
-                <button class="btn btn-sm btn-primary w-100 mt-2 addpos" data-id="${p.id}">Add</button>
+              <div class="mt-2">
+                <select class="form-select form-select-sm size-for-${p.id}">
+                  ${p.stocks.map(s => `<option value="${s.size}">${s.size.toUpperCase()} - ${s.quantity} left</option>`).join('')}
+                </select>
+                <div class="input-group input-group-sm mt-2">
+                    <input type="number" min="1" value="1" class="form-control qty-for-${p.id}">
+                    <button class="btn btn-primary addpos" data-id="${p.id}">Add</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       `).join('');
       container.querySelectorAll('.addpos').forEach(b=> b.addEventListener('click', ()=>{
-        const id = b.dataset.id; const qty = parseInt(document.querySelector('.qty-for-'+id).value||'1',10);
-        addToCart(id, qty);
+        const id = b.dataset.id;
+        const qty = parseInt(document.querySelector('.qty-for-'+id).value||'1',10);
+        const size = document.querySelector('.size-for-'+id).value;
+        addToCart(id, size, qty);
       }));
     });
   }
@@ -145,12 +175,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const branch = document.getElementById('filterBranch') ? document.getElementById('filterBranch').value : '';
     api('get_products',{ params:{ q:q, branch_id: branch } }).then(res=>{
       if(!res.ok) { console.error(res.error); return; }
+      console.log(res.products);
       const rows = res.products.map(p=>`<tr>
         <td>${p.id}</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.category||'')}</td>
         <td>₱${Number(p.price||0).toFixed(2)}</td>
-        <td>${p.stock}</td>
+        <td>
+          ${(p.stocks && p.stocks.length > 0) ? p.stocks.map(s => `<div>${s.size.toUpperCase()}: ${s.quantity}</div>`).join('') : 'N/A'}
+        </td>
         <td>${escapeHtml(p.branch_name||'')}</td>
         <td>${USER_ROLE==='owner'?`<button class="btn btn-sm btn-outline-primary edit-product" data-id="${p.id}">Edit</button> <button class="btn btn-sm btn-danger delete-product" data-id="${p.id}">Delete</button>`:'Read-only'}</td>
       </tr>`).join('');
@@ -162,8 +195,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
         document.getElementById('editItemId').value = prod.id;
         document.getElementById('editItemName').value = prod.name;
         document.getElementById('editItemCategory').value = prod.category;
-        document.getElementById('editItemQty').value = prod.stock;
         document.getElementById('editItemPrice').value = prod.price;
+        ['S', 'M', 'L', 'XL'].forEach(size => {
+            const input = document.getElementById(`editItemStock${size}`);
+            if(input) input.value = 0;
+        });
+        if(prod.stocks){
+            prod.stocks.forEach(s => {
+                const input = document.getElementById(`editItemStock${s.size.toUpperCase()}`);
+                if(input) input.value = s.quantity;
+            });
+        }
         setTimeout(()=>{ const sel=document.getElementById('editItemBranchSelect'); if(sel) sel.value = prod.branch_id||''; },120);
         document.getElementById('editItemCurrentImg').src = prod.photo || 'uploads/no-image.png'; document.getElementById('editItemCurrentImg').style.display='block';
         new bootstrap.Modal(document.getElementById('editItemModal')).show();
@@ -214,9 +256,38 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const editBranchForm = document.getElementById('editBranchForm');
   if(editBranchForm) editBranchForm.addEventListener('submit', e=>{ e.preventDefault(); const fd=new FormData(editBranchForm); fetch('api.php?action=edit_branch',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editBranchModal'))?.hide(); loadBranches(); populateBranchSelects(); } else alert(res.error||'Error'); }); });
 
+  // Suppliers
+  function loadSuppliers(){
+    const tbl = document.getElementById('suppliersContent'); if(!tbl) return;
+    api('get_suppliers').then(res=>{
+      if(!res.ok) { console.error(res.error); return; }
+      const rows = res.suppliers.map(s=>`<tr>
+        <td>${s.id}</td>
+        <td>${escapeHtml(s.name)}</td>
+        <td>${escapeHtml(s.email||'')}</td>
+        <td>${escapeHtml(s.phone||'')}</td>
+        <td>${escapeHtml(s.products||'')}</td>
+        <td><button class="btn btn-sm btn-danger delete-supplier" data-id="${s.id}">Delete</button></td>
+      </tr>`).join('');
+      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Products</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+      document.querySelectorAll('.delete-supplier').forEach(btn=> btn.addEventListener('click', ()=>{
+        if(!confirm('Delete supplier?')) return;
+        const fd = new FormData(); fd.append('id', btn.dataset.id);
+        fetch('api.php?action=delete_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok) loadSuppliers(); else alert(res.error||'Error'); });
+      }));
+    });
+  }
+
+  const addSupplierForm = document.getElementById('addSupplierForm');
+  if(addSupplierForm) addSupplierForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    const fd = new FormData(addSupplierForm);
+    fetch('api.php?action=add_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'))?.hide(); loadSuppliers(); } else alert(res.error||'Error'); });
+  });
+
   // Accounts admin panel
   function loadAccounts(){
-    api('get_accounts').then(res=>{ 
+    api('get_accounts').then(res=>{
       if(!res.ok) return; 
       const tbl = document.getElementById('accountsContent'); 
       if(!tbl) return; 
@@ -247,10 +318,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Edit user form handler
   const editUserForm = document.getElementById('editUserForm');
-  if(editUserForm) editUserForm.addEventListener('submit', e=>{ 
+  if(editUserForm) editUserForm.addEventListener('submit', e=>{
     e.preventDefault(); 
     const fd = new FormData(editUserForm); 
-    fetch('api.php?action=edit_user',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+    fetch('api.php?action=edit_user',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{
       if(res.ok){ 
         bootstrap.Modal.getInstance(document.getElementById('editUserModal'))?.hide(); 
         loadAccounts(); 
@@ -260,11 +331,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
   // Logs - UPDATED: clearer display
-function loadActionLogs(){ 
+  function loadActionLogs(){ 
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading action logs...</div>';
-    api('get_logs',{ params:{ type:'action' }}).then(res=>{ 
+    api('get_logs',{ params:{ type:'action' }}).then(res=>{
       if(!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load action logs: ${escapeHtml(res.error||'Unknown error')}</div>`; return; }
       const rows = res.actions.map(l=>`<tr>
         <td>${l.id}</td>
@@ -273,19 +344,8 @@ function loadActionLogs(){
         <td>${escapeHtml(l.branch_name||'N/A')}</td>
         <td>${escapeHtml(l.created_at)}</td>
         <td>${escapeHtml(l.meta||'')}</td>
-        <td>${USER_ROLE==='owner'?`<button class="btn btn-sm btn-danger delete-log" data-id="${l.id}">Delete</button>`:'Read-only'}</td>
       </tr>`).join('');
-      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Action</th><th>User</th><th>Branch</th><th>Time</th><th>Meta</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`; 
-      
-      // ADDED: Delete button handler
-      document.querySelectorAll('.delete-log').forEach(btn=> btn.addEventListener('click', ()=>{
-        if(!confirm('Are you sure you want to permanently delete this log entry?')) return;
-        const fd = new FormData(); fd.append('id', btn.dataset.id);
-        fetch('api.php?action=delete_log',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
-          if(res.ok) loadActionLogs(); 
-          else alert(res.error||'Error deleting log'); 
-        });
-      }));
+      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Action</th><th>User</th><th>Branch</th><th>Time</th><th>Meta</th></tr></thead><tbody>${rows}</tbody></table>`; 
     }); 
   }
 
@@ -293,7 +353,7 @@ function loadActionLogs(){
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
-    api('get_logs',{ params:{ type:'sales' }}).then(res=>{ 
+    api('get_logs',{ params:{ type:'sales' }}).then(res=>{
       if(!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load sales logs: ${escapeHtml(res.error||'Unknown error')}</div>`; return; }
       const rows = res.sales.map(s=>`<tr>
         <td>${s.id}</td>
@@ -311,33 +371,93 @@ function loadActionLogs(){
   document.getElementById('showActionLogs')?.addEventListener('click', loadActionLogs);
   document.getElementById('showSalesLogs')?.addEventListener('click', loadSalesLogs);
 
-  // Checkout flow (floating cart) - Now should show an alert if API fails
-  document.getElementById('cartButton')?.addEventListener('click', ()=>{
+  function renderCart() {
+    console.log('Rendering cart...');
     const items = CART.slice();
-    if(items.length===0) return alert('Cart empty');
-    const elem = document.getElementById('checkoutItems'); if(!elem) return;
+    if (items.length === 0) {
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('checkoutModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+        return;
+    }
+
+    const elem = document.getElementById('checkoutItems');
+    if (!elem) return;
+
     elem.innerHTML = '';
     let total = 0;
 
-    // fetch product details once (filter by selected branch if any)
     const branch = document.getElementById('posBranchSelect') ? document.getElementById('posBranchSelect').value : '';
-    api('get_products', { params: { q: '', branch_id: branch } }).then(res=>{
-      if(!res.ok){ alert(`Failed to load products for checkout: ${res.error}`); return; }
-      const productsById = {};
-      (res.products||[]).forEach(p=> productsById[p.id] = p);
+    api('get_products', { params: { q: '', branch_id: branch } }).then(res => {
+        if (!res.ok) {
+            alert(`Failed to load products for checkout: ${res.error}`);
+            return;
+        }
 
-      items.forEach(it=>{
-        const p = productsById[it.id];
-        if(!p) return; // product missing
-        const line = Number(p.price) * it.qty;
-        total += line;
-        elem.innerHTML += `<div class="d-flex justify-content-between"><div>${escapeHtml(p.name)} x ${it.qty}</div><div>₱${line.toFixed(2)}</div></div>`;
-      });
+        const productsById = {};
+        (res.products || []).forEach(p => productsById[p.id] = p);
 
-      document.getElementById('checkoutTotal').textContent = total.toFixed(2);
-      // show modal
-      new bootstrap.Modal(document.getElementById('checkoutModal')).show();
+        items.forEach(it => {
+            const p = productsById[it.id];
+            if (!p) return;
+
+            const line = Number(p.price) * it.qty;
+            total += line;
+
+            elem.innerHTML += `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>${escapeHtml(p.name)} (${it.size.toUpperCase()})</div>
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-sm btn-outline-secondary cart-qty-minus" data-id="${p.id}" data-size="${it.size}">-</button>
+                        <span class="mx-2">${it.qty}</span>
+                        <button class="btn btn-sm btn-outline-secondary cart-qty-plus" data-id="${p.id}" data-size="${it.size}">+</button>
+                        <button class="btn btn-sm btn-danger ms-2 cart-remove" data-id="${p.id}" data-size="${it.size}">x</button>
+                        <div class="ms-3" style="width: 80px; text-align: right;">₱${line.toFixed(2)}</div>
+                    </div>
+                </div>`;
+        });
+
+        document.getElementById('checkoutTotal').textContent = total.toFixed(2);
+
+        elem.querySelectorAll('.cart-qty-plus').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                const size = btn.dataset.size;
+                const item = CART.find(x => x.id == id && x.size == size);
+                if (item) {
+                    updateCart(id, size, item.qty + 1);
+                }
+            });
+        });
+
+        elem.querySelectorAll('.cart-qty-minus').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                const size = btn.dataset.size;
+                const item = CART.find(x => x.id == id && x.size == size);
+                if (item) {
+                    updateCart(id, size, item.qty - 1);
+                }
+            });
+        });
+
+        elem.querySelectorAll('.cart-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                const size = btn.dataset.size;
+                updateCart(id, size, 0);
+            });
+        });
     });
+  }
+
+  document.getElementById('cartButton')?.addEventListener('click', () => {
+      if (CART.length === 0) {
+          return alert('Cart empty');
+      }
+      renderCart();
+      new bootstrap.Modal(document.getElementById('checkoutModal')).show();
   });
 
   // Checkout flow (floating cart) - Now with detailed receipt generation
@@ -424,6 +544,13 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
 });
 
   // Init
-  populateBranchSelects().then(()=>{ loadBranches(); loadInventory(); loadPOSProducts(); loadAccounts(); updateCartUI(); });
+  populateBranchSelects().then(()=>{
+    loadBranches();
+    loadInventory();
+    loadPOSProducts();
+    loadAccounts();
+    loadSuppliers();
+    updateCartUI();
+  });
 
 });

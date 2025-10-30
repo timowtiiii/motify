@@ -1,0 +1,7 @@
+First, please run this SQL command in your phpMyAdmin. This will add a unique key to the `product_stocks` table, which is necessary to ensure that there are no duplicate stock entries for the same product and size.
+
+```sql
+ALTER TABLE `product_stocks` ADD UNIQUE `product_id_size` (`product_id`, `size`);
+```
+
+After you have run this command, I will update the `api.php` file to correctly save the stock changes.

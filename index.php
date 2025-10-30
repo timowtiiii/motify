@@ -13,6 +13,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="style.css" rel="stylesheet">
+  <style>
+    .sidebar { width: 80px; }
+    .sidebar .list-group-item { text-align: center; padding: 0.75rem 0.5rem; }
+    .sidebar .list-group-item span { display: block; font-size: 0.65rem; margin-top: 5px; }
+    .sidebar .list-group-item svg { width: 24px; height: 24px; }
+    .main-content { flex-grow: 1; }
+    .container-fluid.d-flex { min-height: calc(100vh - 56px); }
+  </style>
 </head>
 <body class="bg-light text-dark">
 
@@ -26,22 +34,43 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
   </div>
 </nav>
 
-<div class="container-fluid mt-3">
-  <div class="row">
-    <div class="col-md-2">
+<div class="container-fluid d-flex p-0">
+    <div class="sidebar bg-white shadow-sm p-2">
       <div class="list-group">
-        <button class="list-group-item list-group-item-action active" id="menu-dashboard">Dashboard</button>
-        <button class="list-group-item list-group-item-action" id="menu-inventory">Inventory</button>
-        <button class="list-group-item list-group-item-action" id="menu-pos">POS</button>
+        <button class="list-group-item list-group-item-action active" id="menu-dashboard" title="Dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5h-2v12h2zM1.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 1 0v-13a.5.5 0 0 0-.5-.5"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="list-group-item list-group-item-action" id="menu-inventory" title="Inventory">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1.5A1.5 1.5 0 0 0 6.5 0h-5A1.5 1.5 0 0 0 0 1.5v13A1.5 1.5 0 0 0 1.5 16h13a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 14.5 0h-5A1.5 1.5 0 0 0 8 1.5M10 5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 10 5M8.5 4.5a.5.5 0 0 1 1 0v3a.5.5 0 0 1-1 0zM7 5.5a.5.5 0 0 1 1 0v3a.5.5 0 0 1-1 0zM5.5 5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5"/></svg>
+          <span>Inventory</span>
+        </button>
+        <button class="list-group-item list-group-item-action" id="menu-pos" title="POS">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .491.592l-1.5 8A.5.5 0 0 1 13 12H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5M3.102 4l1.313 7h8.17l1.313-7zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m-7 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2m7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg>
+          <span>POS</span>
+        </button>
         <?php if($role==='owner'): ?>
-          <button class="list-group-item list-group-item-action" id="menu-branches">Branches</button>
-          <button class="list-group-item list-group-item-action" id="menu-accounts">Accounts</button>
-          <button class="list-group-item list-group-item-action" id="menu-logs">Logs</button>
+          <button class="list-group-item list-group-item-action" id="menu-branches" title="Branches">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4.5a.5.5 0 0 0 .5-.5v-4h2v4a.5.5 0 0 0 .5.5H14a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 1.146zM12 13H9.5v-4h-3v4H3.5V7.207l4.5-4.5 4.5 4.5z"/></svg>
+            <span>Branches</span>
+          </button>
+          <button class="list-group-item list-group-item-action" id="menu-suppliers" title="Suppliers">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
+            <span>Suppliers</span>
+          </button>
+          <button class="list-group-item list-group-item-action" id="menu-accounts" title="Accounts">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
+            <span>Accounts</span>
+          </button>
+          <button class="list-group-item list-group-item-action" id="menu-logs" title="Logs">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8.5 6.5a.5.5 0 0 0-1 0V10a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 0-1H9z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>
+            <span>Logs</span>
+          </button>
         <?php endif; ?>
       </div>
     </div>
 
-    <div class="col-md-10">
+    <div class="main-content p-3">
       <div id="panel-dashboard" class="mb-3">
         <div class="card p-3">
           <div class="d-flex justify-content-between align-items-center">
@@ -63,7 +92,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <div class="d-flex mb-2 gap-2 align-items-center">
             <label for="filterBranch" class="mb-0 me-2">Branch:</label>
             <select id="filterBranch" class="form-select form-select-sm" style="width:220px"></select>
-            <input id="inventorySearch" class="form-control form-control-sm ms-auto" placeholder="Search...">
+            <input id="inventorySearch" class="form-control form-control-sm ms-auto" placeholder="Search..." style="width: 200px;">
           </div>
           <div id="inventoryContent" class="table-responsive"></div>
         </div>
@@ -75,6 +104,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addBranchModal">➕ Add Branch</button>
         </div>
         <div id="branchesManage" class="row g-3"></div>
+      </div>
+
+      <div id="panel-suppliers" class="d-none mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h4 class="text-primary">Suppliers</h4>
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplierModal">➕ Add Supplier</button>
+        </div>
+        <div id="suppliersContent" class="table-responsive"></div>
       </div>
 
       <div id="panel-accounts" class="d-none mb-3">
@@ -114,8 +151,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
     </div>
   </div>
-</div>
-
+  
 <div style="position:fixed;right:20px;bottom:20px;z-index:9999">
   <button id="cartButton" class="btn btn-primary">🛒 Cart (<span id="cartCount">0</span>)</button>
 </div>
@@ -129,11 +165,27 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <input class="form-control mb-2" name="item_name" placeholder="Item Name" required>
           <input class="form-control mb-2" name="sku" placeholder="SKU (optional)">
           <input class="form-control mb-2" name="category" placeholder="Category">
-          <input type="number" class="form-control mb-2" name="quantity" placeholder="Quantity" required>
           <input type="number" step="0.01" class="form-control mb-2" name="price" placeholder="Price" required>
           <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required></select>
         </div>
         <div class="col-md-6">
+          <label class="small text-muted">Stock</label>
+          <div class="input-group mb-2">
+            <span class="input-group-text">S</span>
+            <input type="number" class="form-control" name="stock_s" placeholder="Quantity" value="0">
+          </div>
+          <div class="input-group mb-2">
+            <span class="input-group-text">M</span>
+            <input type="number" class="form-control" name="stock_m" placeholder="Quantity" value="0">
+          </div>
+          <div class="input-group mb-2">
+            <span class="input-group-text">L</span>
+            <input type="number" class="form-control" name="stock_l" placeholder="Quantity" value="0">
+          </div>
+          <div class="input-group mb-2">
+            <span class="input-group-text">XL</span>
+            <input type="number" class="form-control" name="stock_xl" placeholder="Quantity" value="0">
+          </div>
           <label class="small text-muted">Upload Image (optional)</label>
           <input type="file" class="form-control mb-2" name="photo" id="addItemPhoto">
           <img id="addItemPreview" class="img-fluid" src="" alt="" style="display:none;max-height:160px">
@@ -156,11 +208,27 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <div class="col-md-6">
           <input class="form-control mb-2" name="name" id="editItemName" placeholder="Item Name" required>
           <input class="form-control mb-2" name="category" id="editItemCategory" placeholder="Category">
-          <input type="number" class="form-control mb-2" name="stock" id="editItemQty" placeholder="Quantity" required>
           <input type="number" step="0.01" class="form-control mb-2" name="price" id="editItemPrice" placeholder="Price" required>
           <select class="form-select mb-2" name="branch_id" id="editItemBranchSelect" required></select>
         </div>
         <div class="col-md-6">
+          <label class="small text-muted">Stock</label>
+          <div class="input-group mb-2">
+            <span class="input-group-text">S</span>
+            <input type="number" class="form-control" name="stock_s" id="editItemStockS" placeholder="Quantity" value="0">
+          </div>
+          <div class="input-group mb-2">
+            <span class="input-group-text">M</span>
+            <input type="number" class="form-control" name="stock_m" id="editItemStockM" placeholder="Quantity" value="0">
+          </div>
+          <div class="input-group mb-2">
+            <span class="input-group-text">L</span>
+            <input type="number" class="form-control" name="stock_l" id="editItemStockL" placeholder="Quantity" value="0">
+          </div>
+          <div class="input-group mb-2">
+            <span class="input-group-text">XL</span>
+            <input type="number" class="form-control" name="stock_xl" id="editItemStockXL" placeholder="Quantity" value="0">
+          </div>
           <label class="small text-muted">Current Image</label>
           <img id="editItemCurrentImg" class="img-fluid" src="" alt="" style="display:none;max-height:160px">
           <label class="small text-muted mt-2">Replace Image</label>
@@ -201,6 +269,25 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-primary" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="addSupplierModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="addSupplierForm" class="modal-content" autocomplete="off">
+      <div class="modal-header"><h5 class="modal-title">Add Supplier</h5></div>
+      <div class="modal-body">
+        <input class="form-control mb-2" name="supplier_name" placeholder="Supplier Name" required>
+        <input type="email" class="form-control mb-2" name="email" placeholder="Email">
+        <input class="form-control mb-2" name="phone" placeholder="Phone Number">
+        <input class="form-control mb-2" name="location" placeholder="Location">
+        <textarea class="form-control" name="products" placeholder="Products"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit">Save Supplier</button>
       </div>
     </form>
   </div>

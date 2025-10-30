@@ -51,43 +51,101 @@ try {
       jsonRes(['ok'=>$stmt->execute()]);
       break;
 
+    // ---------------- SUPPLIERS ----------------
+    case 'get_suppliers':
+      $res = $mysqli->query("SELECT id,name,email,phone,location,products FROM suppliers ORDER BY id ASC");
+      $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
+      jsonRes(['ok'=>true,'suppliers'=>$out]);
+      break;
+
+    case 'add_supplier':
+      if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
+      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+      $name = trim($_POST['supplier_name'] ?? '');
+      if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
+      $email = trim($_POST['email'] ?? '');
+      $phone = trim($_POST['phone'] ?? '');
+      $location = trim($_POST['location'] ?? '');
+      $products = trim($_POST['products'] ?? '');
+      $stmt = $mysqli->prepare("INSERT INTO suppliers (name, email, phone, location, products) VALUES (?, ?, ?, ?, ?)");
+      $stmt->bind_param('sssss',$name, $email, $phone, $location, $products);
+      if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
+      jsonRes(['ok'=>false,'error'=>$mysqli->error]);
+      break;
+
+    case 'delete_supplier':
+      if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
+      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+      $id = intval($_POST['id'] ?? 0);
+      if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
+      $stmt = $mysqli->prepare("DELETE FROM suppliers WHERE id=?");
+      $stmt->bind_param('i',$id);
+      jsonRes(['ok'=>$stmt->execute()]);
+      break;
+
     // ---------------- PRODUCTS ----------------
     case 'get_products':
-      $q = trim($_GET['q'] ?? $_REQUEST['q'] ?? '');
-      // branch filter: if staff, default to assigned branch
-      $branch = null;
-      if(isset($_GET['branch_id'])) $branch = $_GET['branch_id'] !== '' ? intval($_GET['branch_id']) : null;
-      elseif(isset($_REQUEST['branch_id'])) $branch = $_REQUEST['branch_id'] !== '' ? intval($_REQUEST['branch_id']) : null;
+        $q = trim($_GET['q'] ?? $_REQUEST['q'] ?? '');
+        // branch filter: if staff, default to assigned branch
+        $branch = null;
+        if (isset($_GET['branch_id'])) {
+            $branch = $_GET['branch_id'] !== '' ? intval($_GET['branch_id']) : null;
+        } elseif (isset($_REQUEST['branch_id'])) {
+            $branch = $_REQUEST['branch_id'] !== '' ? intval($_REQUEST['branch_id']) : null;
+        }
 
-      // If staff, enforce assigned branch in POS queries when requested
-      if(isset($_SESSION['role']) && $_SESSION['role']==='staff'){
-        $assigned = $_SESSION['assigned_branch_id'] ?? null;
-        if($assigned) $branch = intval($assigned);
-      }
+        // If staff, enforce assigned branch in POS queries when requested
+        if (isset($_SESSION['role']) && $_SESSION['role'] === 'staff') {
+            $assigned = $_SESSION['assigned_branch_id'] ?? null;
+            if ($assigned) {
+                $branch = intval($assigned);
+            }
+        }
 
-      $sql = "SELECT p.id,p.sku,p.name,p.category,p.price,p.stock,p.branch_id,COALESCE(p.photo,'') AS photo, b.name AS branch_name
-              FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE 1=1";
-      if($branch!==null && $branch!=='') $sql .= " AND p.branch_id = ".intval($branch);
-      if($q!==''){
-        $q_esc = $mysqli->real_escape_string($q);
-        $sql .= " AND (p.name LIKE '%$q_esc%' OR p.sku LIKE '%$q_esc%' OR p.category LIKE '%$q_esc%')";
-      }
-      $sql .= " ORDER BY p.id DESC LIMIT 1000";
-      $res = $mysqli->query($sql);
-      if($res===false) jsonRes(['ok'=>false,'error'=>$mysqli->error]);
-      $out=[];
-      while($r=$res->fetch_assoc()){
-        $img = trim($r['photo']);
-        if($img==='') $r['photo'] = 'uploads/no-image.png';
-        else { if(strpos($img,'/')===false) $r['photo']='uploads/'.$img; else $r['photo']=$img; }
-        $r['id'] = (int)$r['id'];
-        $r['price'] = (float)$r['price'];
-        $r['stock'] = (int)$r['stock'];
-        $r['branch_id'] = $r['branch_id']!==null ? (int)$r['branch_id'] : null;
-        $out[]=$r;
-      }
-      jsonRes(['ok'=>true,'products'=>$out]);
-      break;
+        $sql = "SELECT p.id, p.sku, p.name, p.category, p.price, p.branch_id, COALESCE(p.photo, '') AS photo, b.name AS branch_name
+                FROM products p LEFT JOIN branches b ON p.branch_id = b.id WHERE 1=1";
+        if ($branch !== null && $branch !== '') {
+            $sql .= " AND p.branch_id = " . intval($branch);
+        }
+        if ($q !== '') {
+            $q_esc = $mysqli->real_escape_string($q);
+            $sql .= " AND (p.name LIKE '%$q_esc%' OR p.sku LIKE '%$q_esc%' OR p.category LIKE '%$q_esc%')";
+        }
+        $sql .= " ORDER BY p.id DESC LIMIT 1000";
+        $res = $mysqli->query($sql);
+        if ($res === false) {
+            jsonRes(['ok' => false, 'error' => $mysqli->error]);
+        }
+        $products = [];
+        while ($r = $res->fetch_assoc()) {
+            $img = trim($r['photo']);
+            if ($img === '') {
+                $r['photo'] = 'uploads/no-image.png';
+            } else {
+                if (strpos($img, '/') === false) {
+                    $r['photo'] = 'uploads/' . $img;
+                } else {
+                    $r['photo'] = $img;
+                }
+            }
+            $r['id'] = (int)$r['id'];
+            $r['price'] = (float)$r['price'];
+            $r['branch_id'] = $r['branch_id'] !== null ? (int)$r['branch_id'] : null;
+            $r['stocks'] = []; // Initialize stocks array
+            $products[$r['id']] = $r;
+        }
+
+        if (!empty($products)) {
+            $product_ids = implode(',', array_keys($products));
+            $stock_sql = "SELECT * FROM product_stocks WHERE product_id IN ($product_ids)";
+            $stock_res = $mysqli->query($stock_sql);
+            while ($stock_row = $stock_res->fetch_assoc()) {
+                $products[$stock_row['product_id']]['stocks'][] = $stock_row;
+            }
+        }
+
+        jsonRes(['ok' => true, 'products' => array_values($products)]);
+        break;
 
     case 'add_product': // owner only
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
@@ -96,7 +154,6 @@ try {
       if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
       $sku = trim($_POST['sku'] ?? '');
       $category = trim($_POST['category'] ?? '');
-      $stock = intval($_POST['quantity'] ?? $_POST['stock'] ?? 0);
       $price = floatval($_POST['price'] ?? 0);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       // file upload
@@ -107,10 +164,22 @@ try {
         $target = 'uploads/'.$fname;
         if(move_uploaded_file($_FILES['photo']['tmp_name'],$target)) $photo_path = $fname;
       }
-      $sql = "INSERT INTO products (sku,name,category,price,stock,branch_id,photo) VALUES (?,?,?,?,?,?,?)";
+      $sql = "INSERT INTO products (sku,name,category,price,branch_id,photo) VALUES (?,?,?,?,?,?)";
       $stmt = $mysqli->prepare($sql);
-      $stmt->bind_param('sssdiis', $sku,$name,$category,$price,$stock,$branch_id,$photo_path);
-      if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
+      $stmt->bind_param('sssdis', $sku,$name,$category,$price,$branch_id,$photo_path);
+      if($stmt->execute()) {
+        $product_id = $stmt->insert_id;
+        $sizes = ['s', 'm', 'l', 'xl'];
+        foreach ($sizes as $size) {
+            if (isset($_POST['stock_' . $size])) {
+                $quantity = intval($_POST['stock_' . $size]);
+                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
+                $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
+                $stock_stmt->execute();
+            }
+        }
+        jsonRes(['ok'=>true,'id'=>$product_id]);
+      }
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
@@ -121,7 +190,6 @@ try {
       $name = trim($_POST['name'] ?? $_POST['item_name'] ?? ''); if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
       $sku = trim($_POST['sku'] ?? '');
       $category = trim($_POST['category'] ?? '');
-      $stock = intval($_POST['stock'] ?? $_POST['quantity'] ?? 0);
       $price = floatval($_POST['price'] ?? 0);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       // handle photo
@@ -140,7 +208,6 @@ try {
       $fields[] = "name=?"; $types.='s'; $vals[]=$name;
       $fields[] = "category=?"; $types.='s'; $vals[]=$category;
       $fields[] = "price=?"; $types.='d'; $vals[]=$price;
-      $fields[] = "stock=?"; $types.='i'; $vals[]=$stock;
       if($branch_id===null) $fields[] = "branch_id = NULL";
       else { $fields[] = "branch_id = ?"; $types.='i'; $vals[]=$branch_id;}
       if($photo_path !== null){ $fields[] = "photo = ?"; $types.='s'; $vals[]=$photo_path; }
@@ -148,7 +215,18 @@ try {
       $types .= 'i'; $vals[] = $id;
       $stmt = $mysqli->prepare($sql);
       if($types!=='') $stmt->bind_param($types, ...$vals);
-      if($stmt->execute()) jsonRes(['ok'=>true]);
+      if($stmt->execute()) {
+        $sizes = ['s', 'm', 'l', 'xl'];
+        foreach ($sizes as $size) {
+            if (isset($_POST['stock_' . $size])) {
+                $quantity = intval($_POST['stock_' . $size]);
+                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
+                $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
+                $stock_stmt->execute();
+            }
+        }
+        jsonRes(['ok'=>true]);
+      }
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
@@ -237,7 +315,7 @@ case 'get_recent_sales':
 
 case 'get_stats':
   $r = $mysqli->query("SELECT COUNT(*) AS cnt FROM products")->fetch_assoc();
-  $r2 = $mysqli->query("SELECT IFNULL(SUM(stock),0) AS total_stock FROM products")->fetch_assoc();
+  $r2 = $mysqli->query("SELECT IFNULL(SUM(quantity),0) AS total_stock FROM product_stocks")->fetch_assoc();
   $r3 = $mysqli->query("SELECT COUNT(*) AS sales_count FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc();
   jsonRes(['ok'=>true,'products'=>intval($r['cnt']),'total_stock'=>floatval($r2['total_stock']),'sales_30d'=>intval($r3['sales_count'])]);
   break;
@@ -264,15 +342,23 @@ case 'get_stats':
   foreach ($items as $it) {
     $pid = intval($it['id']);
     $qty = intval($it['qty']);
+    $size = $it['size'];
     if ($pid <= 0 || $qty <= 0) continue;
 
-    $stmt = $mysqli->prepare("SELECT id,name,price,stock FROM products WHERE id=? LIMIT 1");
+    $stmt = $mysqli->prepare("SELECT id,name,price FROM products WHERE id=? LIMIT 1");
     $stmt->bind_param('i', $pid);
     $stmt->execute();
     $res = $stmt->get_result();
 
     if (!$row = $res->fetch_assoc()) continue;
-    if ($qty > $row['stock']) $qty = $row['stock'];
+    
+    $stock_stmt = $mysqli->prepare("SELECT quantity FROM product_stocks WHERE product_id = ? AND size = ?");
+    $stock_stmt->bind_param('is', $pid, $size);
+    $stock_stmt->execute();
+    $stock_res = $stock_stmt->get_result();
+    $stock_row = $stock_res->fetch_assoc();
+
+    if ($qty > $stock_row['quantity']) $qty = $stock_row['quantity'];
     if ($qty <= 0) continue;
 
     $line = floatval($row['price']) * $qty;
@@ -281,16 +367,17 @@ case 'get_stats':
       'id' => intval($row['id']),
       'name' => $row['name'],
       'qty' => $qty,
+      'size' => $size,
       'price' => floatval($row['price'])
     ];
 
-    $stmt2 = $mysqli->prepare("UPDATE products SET stock = stock - ? WHERE id=? AND stock >= ?");
-    $stmt2->bind_param('iii', $qty, $pid, $qty);
+    $stmt2 = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity - ? WHERE product_id=? AND size = ? AND quantity >= ?");
+    $stmt2->bind_param('iisi', $qty, $pid, $size, $qty);
     $stmt2->execute();
 
     if ($stmt2->affected_rows <= 0) {
       $mysqli->rollback();
-      jsonRes(['ok' => false, 'error' => 'insufficient stock for product id ' . $pid]);
+      jsonRes(['ok' => false, 'error' => 'insufficient stock for product id ' . $pid . ' size ' . $size]);
     }
   }
 
