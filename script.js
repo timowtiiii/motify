@@ -131,35 +131,60 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(!container) return;
     const q = document.getElementById('posSearch') ? document.getElementById('posSearch').value : '';
     const branch = document.getElementById('posBranchSelect') ? document.getElementById('posBranchSelect').value : '';
-    api('get_products',{ params:{ q: q, branch_id: branch } }).then(res=>{
+    api('get_products',{ params:{ q: q, branch_id: branch, source: 'pos' } }).then(res=>{
       if(!res.ok){ container.innerHTML = `<div class="text-danger">Failed to load products: ${escapeHtml(res.error)}</div>`; console.error(res.error); return; }
       const arr = res.products || [];
       if(arr.length===0){ container.innerHTML = '<div class="text-muted">No products found</div>'; return; }
+
+      const getStock = (stocks, size) => {
+        const stock = stocks.find(s => s.size.toLowerCase() === size.toLowerCase());
+        return stock ? stock.quantity : 0;
+      };
+
       container.innerHTML = arr.map(p=>`
-        <div class="col-md-3 col-sm-6">
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
           <div class="card h-100">
-            <img src="${escapeHtml(p.photo||'uploads/no-image.png')}" class="card-img-top" style="height:140px;object-fit:cover" alt="${escapeHtml(p.name)}">
-            <div class="card-body p-2">
-              <div class="fw-bold">${escapeHtml(p.name)}</div>
-              <div class="small text-muted">${escapeHtml(p.category||'')}</div>
+            <img src="${escapeHtml(p.photo||'uploads/no-image.png')}" class="card-img-top" style="height:100px;object-fit:cover" alt="${escapeHtml(p.name)}">
+            <div class="card-body p-1">
+              <div class="fw-semibold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
+              <div class="small text-muted" style="font-size:0.8em;">${escapeHtml(p.category||'')}</div>
               <div class="fw-semibold mt-1">₱${Number(p.price||0).toFixed(2)}</div>
               <div class="mt-2">
-                <select class="form-select form-select-sm size-for-${p.id}">
-                  ${p.stocks.map(s => `<option value="${s.size}">${s.size.toUpperCase()} - ${s.quantity} left</option>`).join('')}
-                </select>
+                <div class="size-boxes" data-product-id="${p.id}">
+                  <div class="size-box" data-size="s">S<br><small>${getStock(p.stocks, 's')} left</small></div>
+                  <div class="size-box" data-size="m">M<br><small>${getStock(p.stocks, 'm')} left</small></div>
+                  <div class="size-box" data-size="l">L<br><small>${getStock(p.stocks, 'l')} left</small></div>
+                  <div class="size-box" data-size="xl">XL<br><small>${getStock(p.stocks, 'xl')} left</small></div>
+                </div>
                 <div class="input-group input-group-sm mt-2">
                     <input type="number" min="1" value="1" class="form-control qty-for-${p.id}">
-                    <button class="btn btn-primary addpos" data-id="${p.id}">Add</button>
+                    <button class="btn btn-primary btn-sm addpos" data-id="${p.id}">Add</button>
                 </div>
               </div>
             </div>
           </div>
         </div>
       `).join('');
+
+      container.querySelectorAll('.size-box').forEach(box => {
+        box.addEventListener('click', () => {
+          const productId = box.parentElement.dataset.productId;
+          // Deselect other boxes for the same product
+          container.querySelectorAll(`.size-boxes[data-product-id="${productId}"] .size-box`).forEach(b => b.classList.remove('selected'));
+          // Select the clicked box
+          box.classList.add('selected');
+        });
+      });
+
       container.querySelectorAll('.addpos').forEach(b=> b.addEventListener('click', ()=>{
         const id = b.dataset.id;
         const qty = parseInt(document.querySelector('.qty-for-'+id).value||'1',10);
-        const size = document.querySelector('.size-for-'+id).value;
+        const selectedSizeBox = document.querySelector(`.size-boxes[data-product-id="${id}"] .size-box.selected`);
+        if (!selectedSizeBox) {
+          alert('Please select a size.');
+          return;
+        }
+        const size = selectedSizeBox.dataset.size;
         addToCart(id, size, qty);
       }));
     });
@@ -173,7 +198,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const tbl = document.getElementById('inventoryContent'); if(!tbl) return;
     const q = document.getElementById('inventorySearch') ? document.getElementById('inventorySearch').value : '';
     const branch = document.getElementById('filterBranch') ? document.getElementById('filterBranch').value : '';
-    api('get_products',{ params:{ q:q, branch_id: branch } }).then(res=>{
+    api('get_products',{ params:{ q:q, branch_id: branch, source: 'inventory' } }).then(res=>{
       if(!res.ok) { console.error(res.error); return; }
       console.log(res.products);
       const rows = res.products.map(p=>`<tr>
@@ -266,10 +291,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <td>${escapeHtml(s.name)}</td>
         <td>${escapeHtml(s.email||'')}</td>
         <td>${escapeHtml(s.phone||'')}</td>
+        <td>${escapeHtml(s.location||'')}</td>
         <td>${escapeHtml(s.products||'')}</td>
-        <td><button class="btn btn-sm btn-danger delete-supplier" data-id="${s.id}">Delete</button></td>
+        <td><button class="btn btn-sm btn-primary edit-supplier" data-id="${s.id}">Edit</button> <button class="btn btn-sm btn-danger delete-supplier" data-id="${s.id}">Delete</button></td>
       </tr>`).join('');
-      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Products</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Location</th><th>Products</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+      
+      document.querySelectorAll('.edit-supplier').forEach(btn=> btn.addEventListener('click', ()=>{
+        const id = btn.dataset.id;
+        const supplier = res.suppliers.find(x=>x.id==id);
+        if(!supplier) return;
+
+        document.getElementById('editSupplierId').value = supplier.id;
+        document.getElementById('editSupplierName').value = supplier.name;
+        document.getElementById('editSupplierEmail').value = supplier.email;
+        document.getElementById('editSupplierPhone').value = supplier.phone;
+        document.getElementById('editSupplierLocation').value = supplier.location;
+        document.getElementById('editSupplierProducts').value = supplier.products;
+
+        new bootstrap.Modal(document.getElementById('editSupplierModal')).show();
+      }));
+
       document.querySelectorAll('.delete-supplier').forEach(btn=> btn.addEventListener('click', ()=>{
         if(!confirm('Delete supplier?')) return;
         const fd = new FormData(); fd.append('id', btn.dataset.id);
@@ -283,6 +325,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     e.preventDefault();
     const fd = new FormData(addSupplierForm);
     fetch('api.php?action=add_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'))?.hide(); loadSuppliers(); } else alert(res.error||'Error'); });
+  });
+
+  const editSupplierForm = document.getElementById('editSupplierForm');
+  if(editSupplierForm) editSupplierForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    const fd = new FormData(editSupplierForm);
+    fetch('api.php?action=edit_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editSupplierModal'))?.hide(); loadSuppliers(); } else alert(res.error||'Error'); });
   });
 
   // Accounts admin panel

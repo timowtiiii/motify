@@ -83,9 +83,28 @@ try {
       jsonRes(['ok'=>$stmt->execute()]);
       break;
 
+    case 'edit_supplier':
+      if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
+      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+      $id = intval($_POST['id'] ?? 0);
+      if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
+      $name = trim($_POST['supplier_name'] ?? '');
+      if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
+      $email = trim($_POST['email'] ?? '');
+      $phone = trim($_POST['phone'] ?? '');
+      $location = trim($_POST['location'] ?? '');
+      $products = trim($_POST['products'] ?? '');
+      $stmt = $mysqli->prepare("UPDATE suppliers SET name=?, email=?, phone=?, location=?, products=? WHERE id=?");
+      $stmt->bind_param('sssssi', $name, $email, $phone, $location, $products, $id);
+      if($stmt->execute()) jsonRes(['ok'=>true]);
+      jsonRes(['ok'=>false,'error'=>$mysqli->error]);
+      break;
+
     // ---------------- PRODUCTS ----------------
     case 'get_products':
         $q = trim($_GET['q'] ?? $_REQUEST['q'] ?? '');
+        $source = $_GET['source'] ?? ''; // 'pos' or 'inventory'
+
         // branch filter: if staff, default to assigned branch
         $branch = null;
         if (isset($_GET['branch_id'])) {
@@ -95,7 +114,7 @@ try {
         }
 
         // If staff, enforce assigned branch in POS queries when requested
-        if (isset($_SESSION['role']) && $_SESSION['role'] === 'staff') {
+        if (isset($_SESSION['role']) && $_SESSION['role'] === 'staff' && $source === 'pos') {
             $assigned = $_SESSION['assigned_branch_id'] ?? null;
             if ($assigned) {
                 $branch = intval($assigned);

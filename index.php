@@ -293,6 +293,26 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
   </div>
 </div>
 
+<div class="modal fade" id="editSupplierModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="editSupplierForm" class="modal-content" autocomplete="off">
+      <div class="modal-header"><h5 class="modal-title">Edit Supplier</h5></div>
+      <div class="modal-body">
+        <input type="hidden" name="id" id="editSupplierId">
+        <input class="form-control mb-2" name="supplier_name" id="editSupplierName" placeholder="Supplier Name" required>
+        <input type="email" class="form-control mb-2" name="email" id="editSupplierEmail" placeholder="Email">
+        <input class="form-control mb-2" name="phone" id="editSupplierPhone" placeholder="Phone Number">
+        <input class="form-control mb-2" name="location" id="editSupplierLocation" placeholder="Location">
+        <textarea class="form-control" name="products" id="editSupplierProducts" placeholder="Products"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal fade" id="registerModal" tabindex="-1">
   <div class="modal-dialog">
     <form id="registerForm" class="modal-content" autocomplete="off">
@@ -387,6 +407,9 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
   </div>
 </div>
 
+<footer class="text-center text-muted small py-3">
+  © 2025 Motify. All rights reserved
+</footer>
 
 <script>const USER_ROLE = <?= json_encode($role) ?>; const ASSIGNED_BRANCH = <?= json_encode($assigned_branch) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
