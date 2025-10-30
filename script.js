@@ -519,7 +519,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     api('checkout',{ method:'POST', body: payload }).then(res=>{ // Using the robust API helper
       if(res.ok){
         CART = []; updateCartUI();
-        new bootstrap.Modal(document.getElementById('checkoutModal'))?.hide();
+        bootstrap.Modal.getInstance(document.getElementById('checkoutModal'))?.hide();
         
         // --- START RECEIPT GENERATION ---
         
