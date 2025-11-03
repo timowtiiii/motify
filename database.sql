@@ -1,3 +1,4 @@
+
 -- create tables for motify
 CREATE TABLE IF NOT EXISTS branches (
   id INT AUTO_INCREMENT PRIMARY KEY,

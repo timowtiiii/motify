@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       document.querySelectorAll('.delete-product').forEach(btn=> btn.addEventListener('click', ()=>{
         if(!confirm('Delete product?')) return;
         const fd = new FormData(); fd.append('id', btn.dataset.id);
-        fetch('api.php?action=delete_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok) loadInventory(); else alert(res.error||'Error'); });
+        fetch('api.php?action=delete_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ loadInventory(); loadPOSProducts(); } else alert(res.error||'Error'); });
       }));
     });
   }
