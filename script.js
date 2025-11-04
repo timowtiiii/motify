@@ -67,6 +67,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   function showPanel(name){
     Object.values(panels).forEach(p=>p && p.classList.add('d-none'));
     if(panels[name]) panels[name].classList.remove('d-none');
+
+    const menuItems = document.querySelectorAll('.sidebar .list-group-item');
+    menuItems.forEach(item => {
+        if (item.id === `menu-${name}`) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
   }
   ['dashboard','inventory','branches','suppliers','accounts','logs','pos'].forEach(id=>{
     const el = document.getElementById('menu-'+id);
@@ -381,6 +390,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Logs - UPDATED: clearer display
   function loadActionLogs(){ 
+    document.getElementById('downloadExcel').style.display = 'none';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading action logs...</div>';
@@ -399,26 +409,40 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
 
   function loadSalesLogs(){ 
+    document.getElementById('downloadExcel').style.display = 'block';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
     api('get_logs',{ params:{ type:'sales' }}).then(res=>{
       if(!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load sales logs: ${escapeHtml(res.error||'Unknown error')}</div>`; return; }
-      const rows = res.sales.map(s=>`<tr>
+const rows = res.sales.map(s=>`<tr>
         <td>${s.id}</td>
         <td>${escapeHtml(s.receipt_no)}</td>
+        <td>${escapeHtml(s.products)}</td>
         <td>₱${Number(s.total||0).toFixed(2)}</td>
         <td>${escapeHtml(s.payment_mode)}</td>
         <td>${escapeHtml(s.username||'N/A')}</td>
         <td>${escapeHtml(s.branch_name||'N/A')}</td>
         <td>${escapeHtml(s.created_at)}</td>
       </tr>`).join('');
-      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Receipt No</th><th>Total</th><th>Payment</th><th>User</th><th>Branch</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`; 
+      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Receipt No</th><th>Products</th><th>Total</th><th>Payment</th><th>User</th><th>Branch</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`; 
     }); 
   }
 
   document.getElementById('showActionLogs')?.addEventListener('click', loadActionLogs);
   document.getElementById('showSalesLogs')?.addEventListener('click', loadSalesLogs);
+  document.getElementById('downloadExcel')?.addEventListener('click', ()=>{
+    api('export_sales_logs').then(res=>{
+      if(res.ok){
+        const a = document.createElement('a');
+        a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(res.csv);
+        a.download = 'sales_logs.csv';
+        a.click();
+      } else {
+        alert(res.error || 'Could not export sales logs.');
+      }
+    });
+  });
 
   function renderCart() {
     console.log('Rendering cart...');
@@ -593,12 +617,96 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
 });
 
   // Init
+  function loadDashboard() {
+    const container = document.getElementById('dashboard-grid');
+    if (!container) return;
+
+    api('get_dashboard_data').then(res => {
+        if (!res.ok) {
+            container.innerHTML = `<div class="text-danger">Failed to load dashboard: ${escapeHtml(res.error)}</div>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-dollar-sign me-2"></i>Total Revenue <span class="${res.sales_trend === 'up' ? 'text-success' : 'text-danger'}">${res.sales_trend === 'up' ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>'}</span></h5>
+                        <p class="card-text fs-4">$${Number(res.total_revenue).toFixed(2)}</p>
+                    </div>
+                </div>
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-exclamation-triangle me-2"></i>Low Stocks</h5>
+                        <ul class="list-unstyled">${res.low_stocks.map(item => `<li>${escapeHtml(item.name)} (${item.stock})</li>`).join('')}</ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-chart-pie me-2"></i>Top Sales</h5>
+                        <canvas id="top-sales-chart"></canvas>
+                    </div>
+                </div>
+                
+            </div>
+        `;
+
+        const topSalesChart = new Chart(document.getElementById('top-sales-chart'), {
+            type: 'pie',
+            data: {
+                labels: res.top_sales.map(item => item.name),
+                datasets: [{
+                    data: res.top_sales.map(item => item.price),
+                    backgroundColor: [
+                        '#6C5CE7',
+                        '#A095E5',
+                        '#D6CFFC',
+                        '#F5F3FF',
+                        '#E0DEFC'
+                    ]
+                }]
+            }
+        });
+
+if (res.trends && res.trends.timeline_data) {
+        const trendsChart = new Chart(document.getElementById('trends-chart'), {
+            type: 'line',
+            data: {
+                labels: res.trends.timeline_data.map(item => item.date),
+                datasets: [{
+                    label: 'Interest Over Time',
+                    data: res.trends.timeline_data.map(item => item.values[0].extracted_value),
+                    borderColor: '#6C5CE7',
+                    backgroundColor: 'rgba(108, 92, 231, 0.2)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    } else {
+        document.getElementById('trends-chart').outerHTML = `<div class="text-danger">${res.trends.error}</div>`;
+    }
+    });
+  }
+
+  document.getElementById('refreshDashboard')?.addEventListener('click', loadDashboard);
+
   populateBranchSelects().then(()=>{
     loadBranches();
     loadInventory();
     loadPOSProducts();
     loadAccounts();
     loadSuppliers();
+    loadDashboard();
     updateCartUI();
   });
 

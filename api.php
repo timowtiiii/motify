@@ -316,7 +316,18 @@ try {
       $type = $_GET['type'] ?? 'action'; // action or sales
       if($type==='sales'){
         $res = $mysqli->query("SELECT s.*, u.username, b.name AS branch_name FROM receipts s LEFT JOIN users u ON s.created_by=u.id LEFT JOIN branches b ON s.branch_id=b.id ORDER BY s.id DESC LIMIT 200");
-        $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
+        $out=[]; 
+        while($r=$res->fetch_assoc()) {
+          $items = json_decode($r['items'], true);
+          $product_names = [];
+          if (is_array($items)) {
+            foreach ($items as $item) {
+              $product_names[] = $item['name'];
+            }
+          }
+          $r['products'] = implode(', ', $product_names);
+          $out[]=$r;
+        }
         jsonRes(['ok'=>true,'sales'=>$out]);
       } else {
         $res = $mysqli->query("SELECT l.*, u.username, b.name AS branch_name FROM action_logs l LEFT JOIN users u ON l.user_id=u.id LEFT JOIN branches b ON l.branch_id=b.id ORDER BY l.id DESC LIMIT 500");
@@ -337,6 +348,26 @@ case 'get_stats':
   $r2 = $mysqli->query("SELECT IFNULL(SUM(quantity),0) AS total_stock FROM product_stocks")->fetch_assoc();
   $r3 = $mysqli->query("SELECT COUNT(*) AS sales_count FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc();
   jsonRes(['ok'=>true,'products'=>intval($r['cnt']),'total_stock'=>floatval($r2['total_stock']),'sales_30d'=>intval($r3['sales_count'])]);
+  break;
+
+case 'export_sales_logs':
+  if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+  $res = $mysqli->query("SELECT s.*, u.username, b.name AS branch_name FROM receipts s LEFT JOIN users u ON s.created_by=u.id LEFT JOIN branches b ON s.branch_id=b.id ORDER BY s.id DESC");
+  $csv = "\"Receipt ID\",\"Products\",\"Total\",\"Payment Method\",\"User\",\"Branch\",\"Time\"\r\n";
+  while($r=$res->fetch_assoc()) {
+    $items = json_decode($r['items'], true);
+    $product_names = [];
+    if (is_array($items)) {
+      $i = 1;
+      foreach ($items as $item) {
+        $product_names[] = $i . '. ' . $item['name'];
+        $i++;
+      }
+    }
+    $r['products'] = implode("\r\n", $product_names);
+    $csv .= '"' . $r['receipt_no'] . '","' . $r['products'] . '","' . $r['total'] . '","' . $r['payment_mode'] . '","' . $r['username'] . '","' . $r['branch_name'] . '","' . $r['created_at'] . "'\r\n";
+  }
+  jsonRes(['ok'=>true, 'csv'=>$csv]);
   break;
 
     case 'checkout':
@@ -435,6 +466,53 @@ case 'get_stats':
   }
   break;
 
+
+    case 'get_dashboard_data':
+      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+
+      // Combined query for dashboard data
+      $dashboard_query = "
+          (SELECT 'total_revenue' as type, SUM(price) as value, NULL as name FROM products)
+          UNION ALL
+          (SELECT 'top_sales' as type, price as value, name FROM products ORDER BY price DESC LIMIT 5)
+          UNION ALL
+          (SELECT 'low_stocks' as type, stock as value, name FROM products WHERE stock < 3 ORDER BY stock ASC)
+      ";
+      $dashboard_result = $mysqli->query($dashboard_query);
+      $dashboard_data = [
+          'total_revenue' => 0,
+          'top_sales' => [],
+          'low_stocks' => []
+      ];
+      while ($row = $dashboard_result->fetch_assoc()) {
+          if ($row['type'] === 'total_revenue') {
+              $dashboard_data['total_revenue'] = $row['value'];
+          } else if ($row['type'] === 'top_sales') {
+              $dashboard_data['top_sales'][] = ['name' => $row['name'], 'price' => $row['value']];
+          } else if ($row['type'] === 'low_stocks') {
+              $dashboard_data['low_stocks'][] = ['name' => $row['name'], 'stock' => $row['value']];
+          }
+      }
+
+      // Sales trend
+      $sales_30_days_query = "SELECT SUM(total) AS total_sales FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+      $sales_30_days_result = $mysqli->query($sales_30_days_query);
+      $sales_30_days = $sales_30_days_result->fetch_assoc()['total_sales'];
+
+      $sales_60_days_query = "SELECT SUM(total) AS total_sales FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)";
+      $sales_60_days_result = $mysqli->query($sales_60_days_query);
+      $sales_60_days = $sales_60_days_result->fetch_assoc()['total_sales'];
+
+      $sales_trend = ($sales_30_days > $sales_60_days) ? 'up' : 'down';
+
+      jsonRes([
+          'ok' => true,
+          'total_revenue' => $dashboard_data['total_revenue'],
+          'top_sales' => $dashboard_data['top_sales'],
+          'low_stocks' => $dashboard_data['low_stocks'],
+          'sales_trend' => $sales_trend
+      ]);
+      break;
 
     default:
       jsonRes(['ok'=>false,'error'=>'unknown action']);

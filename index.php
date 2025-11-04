@@ -78,7 +78,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
             <h4 class="text-primary">Dashboard</h4>
             <button class="btn btn-sm btn-outline-primary" id="refreshDashboard">Refresh</button>
           </div>
-          <div id="stats" class="row g-3 mt-3"></div>
+          <div id="dashboard-grid" class="row g-3 mt-3"></div>
         </div>
       </div>
 
@@ -125,10 +125,10 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         </div>
       </div>
 
-      <div id="panel-logs" class="d-none mb-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
+      <div id="panel-logs" class="d-none mb-3"><div class="d-flex justify-content-between align-items-center mb-2">
           <h4 class="text-primary">Logs</h4>
           <div class="btn-group">
+            <button id="downloadExcel" class="btn btn-outline-success btn-sm" style="display: none;">Download Excel</button>
             <button id="showActionLogs" class="btn btn-outline-secondary btn-sm">Action Logs</button>
             <button id="showSalesLogs" class="btn btn-outline-secondary btn-sm">Sales Logs</button>
           </div>
