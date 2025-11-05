@@ -164,7 +164,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-body row g-2">
         <div class="col-md-6">
           <input class="form-control mb-2" name="item_name" placeholder="Item Name" required>
-          <input class="form-control mb-2" name="sku" placeholder="SKU (optional)">
+          <input class="form-control mb-2" name="sku" placeholder="SKU (Stock Keeping Unit)(optional)">
           <input class="form-control mb-2" name="category" placeholder="Category">
           <input type="number" step="0.01" class="form-control mb-2" name="price" placeholder="Price" required>
           <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required></select>
