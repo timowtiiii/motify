@@ -74,10 +74,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
     <div class="main-content p-3">
       <div id="panel-dashboard" class="mb-3">
         <div class="card p-3">
-          <div class="d-flex justify-content-between align-items-center">
-            <h4 class="text-primary">Dashboard</h4>
-            <button class="btn btn-sm btn-outline-primary" id="refreshDashboard">Refresh</button>
-          </div>
+          <h4 class="text-primary">Dashboard</h4>
           <div id="dashboard-grid" class="row g-3 mt-3"></div>
         </div>
       </div>
@@ -165,7 +162,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <div class="col-md-6">
           <input class="form-control mb-2" name="item_name" placeholder="Item Name" required>
           <input class="form-control mb-2" name="sku" placeholder="SKU (Stock Keeping Unit)(optional)">
-          <input class="form-control mb-2" name="category" placeholder="Category">
+          <select class="form-select mb-2" name="category">
+            <option value="">Select Category</option>
+            <option value="helmet">Helmet</option>
+            <option value="jacket">Jacket</option>
+            <option value="topbox">Topbox</option>
+            <option value="bracket">Bracket</option>
+            <option value="others">Others</option>
+          </select>
           <input type="number" step="0.01" class="form-control mb-2" name="price" placeholder="Price" required>
           <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required></select>
         </div>
@@ -208,7 +212,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <input type="hidden" name="id" id="editItemId">
         <div class="col-md-6">
           <input class="form-control mb-2" name="name" id="editItemName" placeholder="Item Name" required>
-          <input class="form-control mb-2" name="category" id="editItemCategory" placeholder="Category">
+          <select class="form-select mb-2" name="category" id="editItemCategory">
+            <option value="">Select Category</option>
+            <option value="helmet">Helmet</option>
+            <option value="jacket">Jacket</option>
+            <option value="topbox">Topbox</option>
+            <option value="bracket">Bracket</option>
+            <option value="others">Others</option>
+          </select>
           <input type="number" step="0.01" class="form-control mb-2" name="price" id="editItemPrice" placeholder="Price" required>
           <select class="form-select mb-2" name="branch_id" id="editItemBranchSelect" required></select>
         </div>
@@ -414,6 +425,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <script>const USER_ROLE = <?= json_encode($role) ?>; const ASSIGNED_BRANCH = <?= json_encode($assigned_branch) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

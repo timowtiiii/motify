@@ -627,78 +627,169 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
             return;
         }
 
+        const salesToday = Number(res.sales_today).toFixed(2);
+        const salesYesterday = Number(res.sales_yesterday).toFixed(2);
+        const salesThisMonth = Number(res.sales_this_month).toFixed(2);
+        const salesLastMonth = Number(res.sales_last_month).toFixed(2);
+        const totalSales = Number(res.total_sales).toFixed(2);
+
+        const compareSales = (current, previous) => {
+            const currentNum = Number(current);
+            const previousNum = Number(previous);
+            let percentageText = '';
+            let arrow = '';
+            let color = 'text-muted';
+            
+            if (previousNum === 0) {
+                if (currentNum > 0) {
+                    arrow = '<i class="fas fa-arrow-up"></i>';
+                    color = 'text-success';
+                }
+            } else {
+                const percentageChange = ((currentNum - previousNum) / previousNum) * 100;
+                if (percentageChange > 0) {
+                    arrow = '<i class="fas fa-arrow-up"></i>';
+                    color = 'text-success';
+                    percentageText = `${percentageChange.toFixed(1)}%`;
+                } else if (percentageChange < 0) {
+                    arrow = '<i class="fas fa-arrow-down"></i>';
+                    color = 'text-danger';
+                    percentageText = `${Math.abs(percentageChange).toFixed(1)}%`;
+                }
+            }
+            return `<span class="${color}">${arrow} ${percentageText}</span>`;
+        };
+
+        const trendTodayYesterday = compareSales(salesToday, salesYesterday);
+        const trendThisMonthLastMonth = compareSales(salesThisMonth, salesLastMonth);
+
         container.innerHTML = `
-            <div class="col-md-6">
+            <div class="col-md-6 col-lg-3 mb-3">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title"><i class="fas fa-dollar-sign me-2"></i>Total Revenue <span class="${res.sales_trend === 'up' ? 'text-success' : 'text-danger'}">${res.sales_trend === 'up' ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>'}</span></h5>
-                        <p class="card-text fs-4">$${Number(res.total_revenue).toFixed(2)}</p>
-                    </div>
-                </div>
-                <div class="card mt-4">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="fas fa-exclamation-triangle me-2"></i>Low Stocks</h5>
-                        <ul class="list-unstyled">${res.low_stocks.map(item => `<li>${escapeHtml(item.name)} (${item.stock})</li>`).join('')}</ul>
+                        <h6 class="card-subtitle mb-2 text-muted">Sales Today</h6>
+                        <h4 class="card-title">₱${salesToday}</h4>
+                        <p class="card-text">
+                            ${trendTodayYesterday} vs yesterday (₱${salesYesterday})
+                        </p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6 col-lg-3 mb-3">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title"><i class="fas fa-chart-pie me-2"></i>Top Sales</h5>
-                        <canvas id="top-sales-chart"></canvas>
+                        <h6 class="card-subtitle mb-2 text-muted">Sales This Month</h6>
+                        <h4 class="card-title">₱${salesThisMonth}</h4>
+                        <p class="card-text">
+                            ${trendThisMonthLastMonth} vs last month (₱${salesLastMonth})
+                        </p>
                     </div>
                 </div>
-                
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Total Sales</h6>
+                        <h4 class="card-title">₱${totalSales}</h4>
+                        <p class="card-text text-muted">All-time revenue</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Low Stocks (3 or less)</h6>
+                        ${res.low_stocks.length > 0 
+                            ? `<ul class="list-group list-group-flush" style="max-height: 150px; overflow-y: auto;">${res.low_stocks.map(item => 
+                                `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
+                                    ${escapeHtml(item.name)} (${item.size.toUpperCase()})
+                                    <span class="badge bg-danger rounded-pill">${item.quantity}</span>
+                                </li>`).join('')}</ul>`
+                            : '<p class="text-muted mb-0">No items with low stock.</p>'
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
+                        ${res.sales_per_branch.length > 0 
+                            ? `<ul class="list-group list-group-flush" style="max-height: 250px; overflow-y: auto;">${res.sales_per_branch.map(item => 
+                                `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
+                                    ${escapeHtml(item.name)}
+                                    <span class="fw-bold">₱${Number(item.total_sales).toFixed(2)}</span>
+                                </li>`).join('')}</ul>`
+                            : '<p class="text-muted mb-0">No sales data available per branch.</p>'
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Sales Trend (Last 30 Days)</h6>
+                        <canvas id="trends-chart" style="height: 250px;"></canvas>
+                    </div>
+                </div>
             </div>
         `;
 
-        const topSalesChart = new Chart(document.getElementById('top-sales-chart'), {
-            type: 'pie',
-            data: {
-                labels: res.top_sales.map(item => item.name),
-                datasets: [{
-                    data: res.top_sales.map(item => item.price),
-                    backgroundColor: [
-                        '#6C5CE7',
-                        '#A095E5',
-                        '#D6CFFC',
-                        '#F5F3FF',
-                        '#E0DEFC'
-                    ]
-                }]
-            }
-        });
-
-if (res.trends && res.trends.timeline_data) {
-        const trendsChart = new Chart(document.getElementById('trends-chart'), {
-            type: 'line',
-            data: {
-                labels: res.trends.timeline_data.map(item => item.date),
-                datasets: [{
-                    label: 'Interest Over Time',
-                    data: res.trends.timeline_data.map(item => item.values[0].extracted_value),
-                    borderColor: '#6C5CE7',
-                    backgroundColor: 'rgba(108, 92, 231, 0.2)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true
+        // Sales Trend Chart (Last 30 Days)
+        const salesTimelineData = res.sales_timeline_data || [];
+        if (salesTimelineData.length > 0) {
+            new Chart(document.getElementById('trends-chart'), {
+                type: 'line',
+                data: {
+                    labels: salesTimelineData.map(item => item.date),
+                    datasets: [{
+                        label: 'Daily Sales',
+                        data: salesTimelineData.map(item => item.sales),
+                        borderColor: '#6C5CE7',
+                        backgroundColor: 'rgba(108, 92, 231, 0.2)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Sales (₱)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                        title: {
+                            display: false,
+                        }
                     }
                 }
-            }
-        });
-    } else {
-        document.getElementById('trends-chart').outerHTML = `<div class="text-danger">${res.trends.error}</div>`;
-    }
+            });
+        } else {
+            document.getElementById('trends-chart').parentElement.innerHTML = '<p class="text-muted mb-0">No sales trend data available for the last 30 days.</p>';
+        }
     });
   }
 
-  document.getElementById('refreshDashboard')?.addEventListener('click', loadDashboard);
+  // Set up auto-refresh for the dashboard every 15 seconds
+  // We only set the interval after the first load is complete to avoid race conditions
+  function setupDashboardAutoRefresh() {
+    setInterval(loadDashboard, 15000); // Refresh every 15 seconds
+  }
 
   populateBranchSelects().then(()=>{
     loadBranches();
@@ -707,6 +798,7 @@ if (res.trends && res.trends.timeline_data) {
     loadAccounts();
     loadSuppliers();
     loadDashboard();
+    setupDashboardAutoRefresh(); // Start auto-refreshing
     updateCartUI();
   });
 

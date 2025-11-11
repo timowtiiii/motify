@@ -470,47 +470,83 @@ case 'export_sales_logs':
     case 'get_dashboard_data':
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
 
-      // Combined query for dashboard data
-      $dashboard_query = "
-          (SELECT 'total_revenue' as type, SUM(price) as value, NULL as name FROM products)
-          UNION ALL
-          (SELECT 'top_sales' as type, price as value, name FROM products ORDER BY price DESC LIMIT 5)
-          UNION ALL
-          (SELECT 'low_stocks' as type, stock as value, name FROM products WHERE stock < 3 ORDER BY stock ASC)
-      ";
-      $dashboard_result = $mysqli->query($dashboard_query);
       $dashboard_data = [
-          'total_revenue' => 0,
-          'top_sales' => [],
-          'low_stocks' => []
+          'sales_today' => 0,
+          'sales_yesterday' => 0,
+          'sales_this_month' => 0,
+          'sales_last_month' => 0,
+          'total_sales' => 0,
+          'sales_timeline_data' => [],
+          'low_stocks' => [],
+          'sales_per_branch' => [],
       ];
-      while ($row = $dashboard_result->fetch_assoc()) {
-          if ($row['type'] === 'total_revenue') {
-              $dashboard_data['total_revenue'] = $row['value'];
-          } else if ($row['type'] === 'top_sales') {
-              $dashboard_data['top_sales'][] = ['name' => $row['name'], 'price' => $row['value']];
-          } else if ($row['type'] === 'low_stocks') {
-              $dashboard_data['low_stocks'][] = ['name' => $row['name'], 'stock' => $row['value']];
-          }
+
+      // Sales Today
+      $sales_today_query = "SELECT SUM(total) AS sales_today FROM receipts WHERE DATE(created_at) = CURDATE()";
+      $sales_today_result = $mysqli->query($sales_today_query);
+      $sales_today_data = $sales_today_result->fetch_assoc();
+      $dashboard_data['sales_today'] = $sales_today_data['sales_today'] ?? 0;
+
+      // Sales Yesterday
+      $sales_yesterday_query = "SELECT SUM(total) AS sales_yesterday FROM receipts WHERE DATE(created_at) = CURDATE() - INTERVAL 1 DAY";
+      $sales_yesterday_result = $mysqli->query($sales_yesterday_query);
+      $sales_yesterday_data = $sales_yesterday_result->fetch_assoc();
+      $dashboard_data['sales_yesterday'] = $sales_yesterday_data['sales_yesterday'] ?? 0;
+
+      // Sales This Month
+      $sales_this_month_query = "SELECT SUM(total) AS sales_this_month FROM receipts WHERE MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+      $sales_this_month_result = $mysqli->query($sales_this_month_query);
+      $sales_this_month_data = $sales_this_month_result->fetch_assoc();
+      $dashboard_data['sales_this_month'] = $sales_this_month_data['sales_this_month'] ?? 0;
+
+      // Sales Last Month
+      $sales_last_month_query = "SELECT SUM(total) AS sales_last_month FROM receipts WHERE MONTH(created_at) = MONTH(CURDATE() - INTERVAL 1 MONTH) AND YEAR(created_at) = YEAR(CURDATE() - INTERVAL 1 MONTH)";
+      $sales_last_month_result = $mysqli->query($sales_last_month_query);
+      $sales_last_month_data = $sales_last_month_result->fetch_assoc();
+      $dashboard_data['sales_last_month'] = $sales_last_month_data['sales_last_month'] ?? 0;
+
+      // Total Sales (All Time)
+      $total_sales_query = "SELECT SUM(total) AS total_sales FROM receipts";
+      $total_sales_result = $mysqli->query($total_sales_query);
+      $total_sales_data = $total_sales_result->fetch_assoc();
+      $dashboard_data['total_sales'] = $total_sales_data['total_sales'] ?? 0;
+
+      // Sales Per Branch
+      $sales_per_branch_query = "SELECT b.name, SUM(r.total) as total_sales
+                                 FROM receipts r
+                                 JOIN branches b ON r.branch_id = b.id
+                                 WHERE r.branch_id IS NOT NULL
+                                 GROUP BY r.branch_id, b.name
+                                 ORDER BY total_sales DESC";
+      $sales_per_branch_result = $mysqli->query($sales_per_branch_query);
+      while ($row = $sales_per_branch_result->fetch_assoc()) $dashboard_data['sales_per_branch'][] = $row;
+
+      // Sales Timeline Data for Trends Chart (last 30 days)
+      $sales_timeline_query = "SELECT DATE(created_at) as date, SUM(total) as sales FROM receipts WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) GROUP BY DATE(created_at) ORDER BY DATE(created_at) ASC";
+      $sales_timeline_result = $mysqli->query($sales_timeline_query);
+      while ($row = $sales_timeline_result->fetch_assoc()) $dashboard_data['sales_timeline_data'][] = ['date' => $row['date'], 'sales' => (float)$row['sales']];
+
+      // Low Stocks (quantity <= 3)
+      $low_stocks_query = "SELECT p.name, ps.size, ps.quantity 
+                           FROM product_stocks ps 
+                           JOIN products p ON ps.product_id = p.id 
+                           WHERE ps.quantity <= 3 
+                           ORDER BY ps.quantity ASC, p.name ASC";
+      $low_stocks_result = $mysqli->query($low_stocks_query);
+      while ($row = $low_stocks_result->fetch_assoc()) {
+          $dashboard_data['low_stocks'][] = $row;
       }
-
-      // Sales trend
-      $sales_30_days_query = "SELECT SUM(total) AS total_sales FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
-      $sales_30_days_result = $mysqli->query($sales_30_days_query);
-      $sales_30_days = $sales_30_days_result->fetch_assoc()['total_sales'];
-
-      $sales_60_days_query = "SELECT SUM(total) AS total_sales FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)";
-      $sales_60_days_result = $mysqli->query($sales_60_days_query);
-      $sales_60_days = $sales_60_days_result->fetch_assoc()['total_sales'];
-
-      $sales_trend = ($sales_30_days > $sales_60_days) ? 'up' : 'down';
 
       jsonRes([
           'ok' => true,
-          'total_revenue' => $dashboard_data['total_revenue'],
-          'top_sales' => $dashboard_data['top_sales'],
+          'sales_today' => $dashboard_data['sales_today'],
+          'sales_yesterday' => $dashboard_data['sales_yesterday'],
+          'sales_this_month' => $dashboard_data['sales_this_month'],
+          'sales_last_month' => $dashboard_data['sales_last_month'],
+          'total_sales' => $dashboard_data['total_sales'],
           'low_stocks' => $dashboard_data['low_stocks'],
-          'sales_trend' => $sales_trend
+          'sales_per_branch' => $dashboard_data['sales_per_branch'],
+          'sales_timeline_data' => $dashboard_data['sales_timeline_data'],
       ]);
       break;
 
