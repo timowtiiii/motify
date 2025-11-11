@@ -158,14 +158,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <div class="fw-semibold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
               <div class="small text-muted" style="font-size:0.8em;">${escapeHtml(p.category||'')}</div>
               <div class="fw-semibold mt-1">₱${Number(p.price||0).toFixed(2)}</div>
-              <div class="mt-2">
-                <div class="size-boxes" data-product-id="${p.id}">
+              <div class="mt-2 stock-container" data-category="${p.category}"><div class="size-boxes" data-product-id="${p.id}">
                   <div class="size-box" data-size="s">S<br><small>${getStock(p.stocks, 's')} left</small></div>
                   <div class="size-box" data-size="m">M<br><small>${getStock(p.stocks, 'm')} left</small></div>
                   <div class="size-box" data-size="l">L<br><small>${getStock(p.stocks, 'l')} left</small></div>
                   <div class="size-box" data-size="xl">XL<br><small>${getStock(p.stocks, 'xl')} left</small></div>
                 </div>
                 <div class="input-group input-group-sm mt-2">
+                    <div class="regular-stock-display d-none">
+                      Stock: ${getStock(p.stocks, 'os')}
+                    </div>
                     <input type="number" min="1" value="1" class="form-control qty-for-${p.id}">
                     <button class="btn btn-primary btn-sm addpos" data-id="${p.id}">Add</button>
                 </div>
@@ -174,6 +176,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
           </div>
         </div>
       `).join('');
+
+      container.querySelectorAll('.stock-container').forEach(sc => {
+        const category = sc.dataset.category;
+        if (category === 'bracket' || category === 'topbox') {
+            sc.querySelector('.size-boxes')?.classList.add('d-none');
+            sc.querySelector('.regular-stock-display')?.classList.remove('d-none');
+            sc.querySelector('.addpos')?.classList.add('d-none'); // Hide add button if no size selection
+            sc.querySelector('.qty-for-' + sc.querySelector('.size-boxes').dataset.productId)?.classList.add('d-none');
+            const regularStockDisplay = sc.querySelector('.regular-stock-display');
+            regularStockDisplay.innerHTML += ` <button class="btn btn-primary btn-sm addpos-regular" data-id="${sc.querySelector('.size-boxes').dataset.productId}">Add</button>`;
+        }
+      });
 
       container.querySelectorAll('.size-box').forEach(box => {
         box.addEventListener('click', () => {
@@ -196,6 +210,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const size = selectedSizeBox.dataset.size;
         addToCart(id, size, qty);
       }));
+
+      container.querySelectorAll('.addpos-regular').forEach(b => b.addEventListener('click', () => {
+          const id = b.dataset.id;
+          const qty = 1; // Default to 1 for regular items
+          addToCart(id, 'os', qty);
+      }));
     });
   }
 
@@ -213,10 +233,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const rows = res.products.map(p=>`<tr>
         <td>${p.id}</td>
         <td>${escapeHtml(p.name)}</td>
-        <td>${escapeHtml(p.category||'')}</td>
+        <td>${escapeHtml(p.category || '')}</td>
         <td>₱${Number(p.price||0).toFixed(2)}</td>
         <td>
-          ${(p.stocks && p.stocks.length > 0) ? p.stocks.map(s => `<div>${s.size.toUpperCase()}: ${s.quantity}</div>`).join('') : 'N/A'}
+          ${(p.stocks && p.stocks.length > 0) 
+            ? p.stocks.map(s => `<div>${s.size === 'os' ? 'Stock' : s.size.toUpperCase()}: ${s.quantity}</div>`).join('') 
+            : 'N/A'}
         </td>
         <td>${escapeHtml(p.branch_name||'')}</td>
         <td>${USER_ROLE==='owner'?`<button class="btn btn-sm btn-outline-primary edit-product" data-id="${p.id}">Edit</button> <button class="btn btn-sm btn-danger delete-product" data-id="${p.id}">Delete</button>`:'Read-only'}</td>
@@ -228,15 +250,39 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(!prod) return;
         document.getElementById('editItemId').value = prod.id;
         document.getElementById('editItemName').value = prod.name;
-        document.getElementById('editItemCategory').value = prod.category;
+        const categorySelect = document.getElementById('editItemCategory');
+        categorySelect.value = prod.category;
+        // Manually trigger change to update stock fields visibility
+        handleCategoryChange(
+            prod.category,
+            document.getElementById('editItemSizeStock'),
+            document.getElementById('editItemRegularStock'),
+            document.getElementById('editItemOthersStockTypeContainer')
+        );
+        // If category is 'others', determine which stock type to pre-select
+        if (prod.category === 'others') {
+            const stockTypeSelect = document.getElementById('editItemOthersStockTypeContainer').querySelector('select');
+            const hasRegularStock = prod.stocks.some(s => s.size === 'os');
+            stockTypeSelect.value = hasRegularStock ? 'regular' : 'sizes';
+        }
+        categorySelect.dispatchEvent(new Event('change'));
         document.getElementById('editItemPrice').value = prod.price;
-        ['S', 'M', 'L', 'XL'].forEach(size => {
-            const input = document.getElementById(`editItemStock${size}`);
-            if(input) input.value = 0;
-        });
+
+        // Reset all stock fields
+        document.getElementById('editItemStockS').value = 0;
+        document.getElementById('editItemStockM').value = 0;
+        document.getElementById('editItemStockL').value = 0;
+        document.getElementById('editItemStockXL').value = 0;
+        document.getElementById('editItemStockRegular').value = 0;
+
         if(prod.stocks){
             prod.stocks.forEach(s => {
-                const input = document.getElementById(`editItemStock${s.size.toUpperCase()}`);
+                let input;
+                if (s.size === 'os') {
+                    input = document.getElementById('editItemStockRegular');
+                } else {
+                    input = document.getElementById(`editItemStock${s.size.toUpperCase()}`);
+                }
                 if(input) input.value = s.quantity;
             });
         }
@@ -260,6 +306,57 @@ document.addEventListener('DOMContentLoaded', ()=>{
     e.preventDefault();
     const fd = new FormData(addItemForm);
     fetch('api.php?action=add_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addItemModal'))?.hide(); loadInventory(); loadPOSProducts(); } else alert(res.error||'Error'); });
+  });
+
+  // Add/Edit Modal Category Change Handler
+  function handleCategoryChange(categoryValue, sizeStockEl, regularStockEl, othersContainerEl) {
+      if (categoryValue === 'bracket' || categoryValue === 'topbox') {
+          sizeStockEl.classList.add('d-none');
+          regularStockEl.classList.remove('d-none');
+          if (othersContainerEl) othersContainerEl.classList.add('d-none');
+      } else if (categoryValue === 'others') {
+          sizeStockEl.classList.add('d-none');
+          regularStockEl.classList.add('d-none');
+          if (othersContainerEl) othersContainerEl.classList.remove('d-none');
+      } else {
+          sizeStockEl.classList.remove('d-none');
+          regularStockEl.classList.add('d-none');
+          if (othersContainerEl) othersContainerEl.classList.add('d-none');
+      }
+  }
+
+  const addItemCategorySelect = document.querySelector('#addItemModal select[name="category"]');
+  if (addItemCategorySelect) {
+      addItemCategorySelect.addEventListener('change', (e) => {
+          handleCategoryChange(e.target.value, document.getElementById('addItemSizeStock'), document.getElementById('addItemRegularStock'), document.getElementById('addItemOthersStockTypeContainer'));
+      });
+  }
+  const editItemCategorySelect = document.querySelector('#editItemModal select[name="category"]');
+  if (editItemCategorySelect) {
+      editItemCategorySelect.addEventListener('change', (e) => {
+          handleCategoryChange(e.target.value, document.getElementById('editItemSizeStock'), document.getElementById('editItemRegularStock'), document.getElementById('editItemOthersStockTypeContainer'));
+      });
+  }
+
+  // Handler for the new "others" stock type dropdown
+  function handleOthersStockTypeChange(typeValue, sizeStockEl, regularStockEl) {
+      if (typeValue === 'sizes') {
+          sizeStockEl.classList.remove('d-none');
+          regularStockEl.classList.add('d-none');
+      } else if (typeValue === 'regular') {
+          sizeStockEl.classList.add('d-none');
+          regularStockEl.classList.remove('d-none');
+      } else {
+          sizeStockEl.classList.add('d-none');
+          regularStockEl.classList.add('d-none');
+      }
+  }
+
+  document.querySelector('#addItemModal select[name="others_stock_type"]')?.addEventListener('change', (e) => {
+      handleOthersStockTypeChange(e.target.value, document.getElementById('addItemSizeStock'), document.getElementById('addItemRegularStock'));
+  });
+  document.querySelector('#editItemModal select[name="others_stock_type"]')?.addEventListener('change', (e) => {
+      handleOthersStockTypeChange(e.target.value, document.getElementById('editItemSizeStock'), document.getElementById('editItemRegularStock'));
   });
 
   // Edit product form

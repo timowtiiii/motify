@@ -188,13 +188,22 @@ try {
       $stmt->bind_param('sssdis', $sku,$name,$category,$price,$branch_id,$photo_path);
       if($stmt->execute()) {
         $product_id = $stmt->insert_id;
-        $sizes = ['s', 'm', 'l', 'xl'];
-        foreach ($sizes as $size) {
-            if (isset($_POST['stock_' . $size])) {
-                $quantity = intval($_POST['stock_' . $size]);
-                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
-                $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
+        if (isset($_POST['stock_regular'])) {
+            if (isset($_POST['stock_regular'])) {
+                $quantity = intval($_POST['stock_regular']);
+                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
+                $stock_stmt->bind_param('ii', $product_id, $quantity);
                 $stock_stmt->execute();
+            }
+        } else {
+            $sizes = ['s', 'm', 'l', 'xl'];
+            foreach ($sizes as $size) {
+                if (isset($_POST['stock_' . $size])) {
+                    $quantity = intval($_POST['stock_' . $size]);
+                    $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
+                    $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
+                    $stock_stmt->execute();
+                }
             }
         }
         jsonRes(['ok'=>true,'id'=>$product_id]);
@@ -235,13 +244,22 @@ try {
       $stmt = $mysqli->prepare($sql);
       if($types!=='') $stmt->bind_param($types, ...$vals);
       if($stmt->execute()) {
-        $sizes = ['s', 'm', 'l', 'xl'];
-        foreach ($sizes as $size) {
-            if (isset($_POST['stock_' . $size])) {
-                $quantity = intval($_POST['stock_' . $size]);
-                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
-                $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
+        if (isset($_POST['stock_regular'])) {
+            if (isset($_POST['stock_regular'])) {
+                $quantity = intval($_POST['stock_regular']);
+                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?) ON DUPLICATE KEY UPDATE quantity = ?");
+                $stock_stmt->bind_param('iii', $id, $quantity, $quantity);
                 $stock_stmt->execute();
+            }
+        } else {
+            $sizes = ['s', 'm', 'l', 'xl'];
+            foreach ($sizes as $size) {
+                if (isset($_POST['stock_' . $size])) {
+                    $quantity = intval($_POST['stock_' . $size]);
+                    $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
+                    $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
+                    $stock_stmt->execute();
+                }
             }
         }
         jsonRes(['ok'=>true]);

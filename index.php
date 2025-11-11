@@ -174,22 +174,35 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required></select>
         </div>
         <div class="col-md-6">
-          <label class="small text-muted">Stock</label>
-          <div class="input-group mb-2">
-            <span class="input-group-text">S</span>
-            <input type="number" class="form-control" name="stock_s" placeholder="Quantity" value="0">
+          <div id="addItemOthersStockTypeContainer" class="d-none">
+            <select class="form-select mb-2" name="others_stock_type">
+              <option value="">Select Stock Type</option>
+              <option value="sizes">Stock by Size</option>
+              <option value="regular">Regular Stock</option>
+            </select>
           </div>
-          <div class="input-group mb-2">
-            <span class="input-group-text">M</span>
-            <input type="number" class="form-control" name="stock_m" placeholder="Quantity" value="0">
+          <div id="addItemSizeStock">
+            <label class="small text-muted">Stock by Size</label>
+            <div class="input-group mb-2">
+              <span class="input-group-text">S</span>
+              <input type="number" class="form-control" name="stock_s" placeholder="Quantity" value="0">
+            </div>
+            <div class="input-group mb-2">
+              <span class="input-group-text">M</span>
+              <input type="number" class="form-control" name="stock_m" placeholder="Quantity" value="0">
+            </div>
+            <div class="input-group mb-2">
+              <span class="input-group-text">L</span>
+              <input type="number" class="form-control" name="stock_l" placeholder="Quantity" value="0">
+            </div>
+            <div class="input-group mb-2">
+              <span class="input-group-text">XL</span>
+              <input type="number" class="form-control" name="stock_xl" placeholder="Quantity" value="0">
+            </div>
           </div>
-          <div class="input-group mb-2">
-            <span class="input-group-text">L</span>
-            <input type="number" class="form-control" name="stock_l" placeholder="Quantity" value="0">
-          </div>
-          <div class="input-group mb-2">
-            <span class="input-group-text">XL</span>
-            <input type="number" class="form-control" name="stock_xl" placeholder="Quantity" value="0">
+          <div id="addItemRegularStock" class="d-none">
+            <label class="small text-muted">Stock</label>
+            <input type="number" class="form-control" name="stock_regular" placeholder="Quantity" value="0">
           </div>
           <label class="small text-muted">Upload Image (optional)</label>
           <input type="file" class="form-control mb-2" name="photo" id="addItemPhoto">
@@ -224,22 +237,35 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <select class="form-select mb-2" name="branch_id" id="editItemBranchSelect" required></select>
         </div>
         <div class="col-md-6">
-          <label class="small text-muted">Stock</label>
-          <div class="input-group mb-2">
-            <span class="input-group-text">S</span>
-            <input type="number" class="form-control" name="stock_s" id="editItemStockS" placeholder="Quantity" value="0">
+          <div id="editItemOthersStockTypeContainer" class="d-none">
+            <select class="form-select mb-2" name="others_stock_type">
+              <option value="">Select Stock Type</option>
+              <option value="sizes">Stock by Size</option>
+              <option value="regular">Regular Stock</option>
+            </select>
           </div>
-          <div class="input-group mb-2">
-            <span class="input-group-text">M</span>
-            <input type="number" class="form-control" name="stock_m" id="editItemStockM" placeholder="Quantity" value="0">
+          <div id="editItemSizeStock">
+            <label class="small text-muted">Stock by Size</label>
+            <div class="input-group mb-2">
+              <span class="input-group-text">S</span>
+              <input type="number" class="form-control" name="stock_s" id="editItemStockS" placeholder="Quantity" value="0">
+            </div>
+            <div class="input-group mb-2">
+              <span class="input-group-text">M</span>
+              <input type="number" class="form-control" name="stock_m" id="editItemStockM" placeholder="Quantity" value="0">
+            </div>
+            <div class="input-group mb-2">
+              <span class="input-group-text">L</span>
+              <input type="number" class="form-control" name="stock_l" id="editItemStockL" placeholder="Quantity" value="0">
+            </div>
+            <div class="input-group mb-2">
+              <span class="input-group-text">XL</span>
+              <input type="number" class="form-control" name="stock_xl" id="editItemStockXL" placeholder="Quantity" value="0">
+            </div>
           </div>
-          <div class="input-group mb-2">
-            <span class="input-group-text">L</span>
-            <input type="number" class="form-control" name="stock_l" id="editItemStockL" placeholder="Quantity" value="0">
-          </div>
-          <div class="input-group mb-2">
-            <span class="input-group-text">XL</span>
-            <input type="number" class="form-control" name="stock_xl" id="editItemStockXL" placeholder="Quantity" value="0">
+          <div id="editItemRegularStock" class="d-none">
+            <label class="small text-muted">Stock</label>
+            <input type="number" class="form-control" name="stock_regular" id="editItemStockRegular" placeholder="Quantity" value="0">
           </div>
           <label class="small text-muted">Current Image</label>
           <img id="editItemCurrentImg" class="img-fluid" src="" alt="" style="display:none;max-height:160px">
