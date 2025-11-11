@@ -158,63 +158,60 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <div class="fw-semibold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
               <div class="small text-muted" style="font-size:0.8em;">${escapeHtml(p.category||'')}</div>
               <div class="fw-semibold mt-1">₱${Number(p.price||0).toFixed(2)}</div>
-              <div class="mt-2 stock-container" data-category="${p.category}"><div class="size-boxes" data-product-id="${p.id}">
+              <div class="mt-2 stock-container" data-product-id="${p.id}" data-has-regular-stock="${p.stocks.some(s => s.size === 'os') ? 'true' : 'false'}">
+                <div class="size-boxes">
                   <div class="size-box" data-size="s">S<br><small>${getStock(p.stocks, 's')} left</small></div>
                   <div class="size-box" data-size="m">M<br><small>${getStock(p.stocks, 'm')} left</small></div>
                   <div class="size-box" data-size="l">L<br><small>${getStock(p.stocks, 'l')} left</small></div>
                   <div class="size-box" data-size="xl">XL<br><small>${getStock(p.stocks, 'xl')} left</small></div>
                 </div>
+                <div class="regular-stock-display d-none">
+                  <small>Stock: ${getStock(p.stocks, 'os')}</small>
+                </div>
                 <div class="input-group input-group-sm mt-2">
-                    <div class="regular-stock-display d-none">
-                      Stock: ${getStock(p.stocks, 'os')}
-                    </div>
-                    <input type="number" min="1" value="1" class="form-control qty-for-${p.id}">
-                    <button class="btn btn-primary btn-sm addpos" data-id="${p.id}">Add</button>
+                  <input type="number" min="1" value="1" class="form-control qty-input">
+                  <button class="btn btn-primary btn-sm add-to-cart-btn">Add</button>
                 </div>
               </div>
             </div>
           </div>
         </div>
       `).join('');
-
+      
       container.querySelectorAll('.stock-container').forEach(sc => {
-        const category = sc.dataset.category;
-        if (category === 'bracket' || category === 'topbox') {
+        if (sc.dataset.hasRegularStock === 'true') {
             sc.querySelector('.size-boxes')?.classList.add('d-none');
             sc.querySelector('.regular-stock-display')?.classList.remove('d-none');
-            sc.querySelector('.addpos')?.classList.add('d-none'); // Hide add button if no size selection
-            sc.querySelector('.qty-for-' + sc.querySelector('.size-boxes').dataset.productId)?.classList.add('d-none');
-            const regularStockDisplay = sc.querySelector('.regular-stock-display');
-            regularStockDisplay.innerHTML += ` <button class="btn btn-primary btn-sm addpos-regular" data-id="${sc.querySelector('.size-boxes').dataset.productId}">Add</button>`;
         }
       });
 
       container.querySelectorAll('.size-box').forEach(box => {
         box.addEventListener('click', () => {
-          const productId = box.parentElement.dataset.productId;
+          const productId = box.closest('.stock-container').dataset.productId;
           // Deselect other boxes for the same product
-          container.querySelectorAll(`.size-boxes[data-product-id="${productId}"] .size-box`).forEach(b => b.classList.remove('selected'));
+          container.querySelectorAll(`.stock-container[data-product-id="${productId}"] .size-box`).forEach(b => b.classList.remove('selected'));
           // Select the clicked box
           box.classList.add('selected');
         });
       });
 
-      container.querySelectorAll('.addpos').forEach(b=> b.addEventListener('click', ()=>{
-        const id = b.dataset.id;
-        const qty = parseInt(document.querySelector('.qty-for-'+id).value||'1',10);
-        const selectedSizeBox = document.querySelector(`.size-boxes[data-product-id="${id}"] .size-box.selected`);
-        if (!selectedSizeBox) {
-          alert('Please select a size.');
-          return;
-        }
-        const size = selectedSizeBox.dataset.size;
-        addToCart(id, size, qty);
-      }));
+      container.querySelectorAll('.add-to-cart-btn').forEach(b => b.addEventListener('click', () => {
+        const stockContainer = b.closest('.stock-container');
+        const id = stockContainer.dataset.productId;
+        const hasRegularStock = stockContainer.dataset.hasRegularStock === 'true';
+        const qty = parseInt(stockContainer.querySelector('.qty-input').value || '1', 10);
 
-      container.querySelectorAll('.addpos-regular').forEach(b => b.addEventListener('click', () => {
-          const id = b.dataset.id;
-          const qty = 1; // Default to 1 for regular items
-          addToCart(id, 'os', qty);
+        if (hasRegularStock) {
+            addToCart(id, 'os', qty);
+        } else {
+            const selectedSizeBox = stockContainer.querySelector('.size-box.selected');
+            if (!selectedSizeBox) {
+                alert('Please select a size.');
+                return;
+            }
+            const size = selectedSizeBox.dataset.size;
+            addToCart(id, size, qty);
+        }
       }));
     });
   }
