@@ -725,29 +725,36 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
 
         // Check role from response and render appropriate dashboard
         if (res.role === 'staff') {
-            const trendingItems = res.trending_items || [];
-            let staffDashboardHtml = `
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-body">
-                            <h6 class="card-subtitle mb-2 text-muted">Hot Deals (Last 30 Days in Your Branch)</h6>
-                            ${trendingItems.length > 0 
-                                ? `<div class="row g-3 mt-2">${trendingItems.map(item => 
-                                    `<div class="col-lg-3 col-md-4 col-sm-6 col-6">
-                                        <div class="card h-100 text-center">
-                                            <img src="${escapeHtml(item.photo)}" class="card-img-top" style="height: 150px; object-fit: cover;">
-                                            <div class="card-body p-2">
-                                                <div class="fw-semibold small">${escapeHtml(item.name)}</div>
-                                                <span class="badge bg-primary rounded-pill mt-2">${item.qty} sold</span>
+            const trendingItemsByCategory = res.trending_items || {};
+            let staffDashboardHtml = '';
+
+            if (Object.keys(trendingItemsByCategory).length > 0) {
+                for (const category in trendingItemsByCategory) {
+                    const items = trendingItemsByCategory[category];
+                    staffDashboardHtml += `
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Hot Deals: ${escapeHtml(category)} (Last 30 Days)</h6>
+                                    <div class="row g-3 mt-2">${items.map(item =>
+                                        `<div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 col-6">
+                                            <div class="card h-100 text-center">
+                                                <img src="${escapeHtml(item.photo)}" class="card-img-top" style="height: 120px; object-fit: cover;">
+                                                <div class="card-body p-2">
+                                                    <div class="fw-semibold small">${escapeHtml(item.name)}</div>
+                                                    <span class="badge bg-primary rounded-pill mt-2">${item.qty} sold</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>`
-                                ).join('')}</div>`
-                                : '<p class="text-muted mb-0">No sales data available to determine trending items.</p>'
-                            }
-                        </div>
-                    </div>
-                </div>`;
+                                        </div>`
+                                    ).join('')}</div>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+            } else {
+                staffDashboardHtml = '<div class="col-12"><div class="card"><div class="card-body"><p class="text-muted mb-0">No sales data available to determine trending items in your branch.</p></div></div></div>';
+            }
+
             container.innerHTML = staffDashboardHtml;
             return; // Stop further execution for staff
         }

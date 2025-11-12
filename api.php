@@ -549,50 +549,74 @@ case 'export_sales_logs':
             jsonRes(['ok' => true, 'role' => 'staff', 'trending_items' => []]); // Staff not assigned to a branch
         }
 
-        $trending_items = [];
+        // The new structure will be an associative array: [ 'category_name' => [items] ]
+        $trending_by_category = [];
         $sql = "SELECT items FROM receipts WHERE branch_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
         $stmt = $mysqli->prepare($sql);
         $stmt->bind_param('i', $staff_branch_id);
         $stmt->execute();
         $res = $stmt->get_result();
 
+        // 1. Aggregate sales quantity for each product
         $item_sales = [];
         while ($r = $res->fetch_assoc()) {
             $items = json_decode($r['items'], true);
             if (is_array($items)) {
                 foreach ($items as $item) {
                     $id = intval($item['id']);
-                    $qty = intval($item['qty']);
-                    if (!isset($item_sales[$id])) $item_sales[$id] = 0;
-                    $item_sales[$id] += $qty;
+                    if ($id > 0) {
+                        $qty = intval($item['qty']);
+                        if (!isset($item_sales[$id])) $item_sales[$id] = 0;
+                        $item_sales[$id] += $qty;
+                    }
                 }
             }
         }
-        arsort($item_sales); // Sort by quantity sold, descending
-        $top_item_ids = array_slice(array_keys($item_sales), 0, 5, true); // Get top 5 IDs
 
-        if (!empty($top_item_ids)) {
-            $ids_placeholder = implode(',', array_fill(0, count($top_item_ids), '?'));
-            $types = str_repeat('i', count($top_item_ids));
+        if (!empty($item_sales)) {
+            // 2. Fetch product details (including category) for all sold items
+            $sold_product_ids = array_keys($item_sales);
+            $ids_placeholder = implode(',', array_fill(0, count($sold_product_ids), '?'));
+            $types = str_repeat('i', count($sold_product_ids));
             
-            $product_sql = "SELECT id, name, photo FROM products WHERE id IN ($ids_placeholder)";
+            $product_sql = "SELECT id, name, photo, category FROM products WHERE id IN ($ids_placeholder)";
             $product_stmt = $mysqli->prepare($product_sql);
-            $product_stmt->bind_param($types, ...$top_item_ids);
+            $product_stmt->bind_param($types, ...$sold_product_ids);
             $product_stmt->execute();
             $product_res = $product_stmt->get_result();
             
-            $products_by_id = [];
+            // 3. Group items by category and add their sales quantity
             while ($p_row = $product_res->fetch_assoc()) {
-                $products_by_id[$p_row['id']] = $p_row;
+                $category_name = !empty($p_row['category']) ? ucfirst($p_row['category']) : 'Uncategorized';
+                if (!isset($trending_by_category[$category_name])) {
+                    $trending_by_category[$category_name] = [];
+                }
+                // Ensure photo path is correctly formatted
+                $photo_path = trim($p_row['photo']);
+                if ($photo_path === '') {
+                    $photo_url = 'uploads/no-image.png';
+                } else {
+                    // Check if it's already a full path or just a filename
+                    $photo_url = (strpos($photo_path, '/') === false) ? 'uploads/' . $photo_path : $photo_path;
+                }
+
+                $trending_by_category[$category_name][] = [
+                    'name' => $p_row['name'],
+                    'qty' => $item_sales[$p_row['id']],
+                    'photo' => $photo_url
+                ];
             }
 
-            foreach ($top_item_ids as $id) {
-                $product = $products_by_id[$id] ?? null;
-                if ($product) $trending_items[] = ['name' => $product['name'], 'qty' => $item_sales[$id], 'photo' => $product['photo'] ? 'uploads/' . $product['photo'] : 'uploads/no-image.png'];
+            // 4. For each category, sort by quantity and slice the top 5
+            foreach ($trending_by_category as $category => &$items) {
+                usort($items, function($a, $b) {
+                    return $b['qty'] <=> $a['qty'];
+                });
+                $items = array_slice($items, 0, 5);
             }
         }
 
-        jsonRes(['ok' => true, 'role' => 'staff', 'trending_items' => $trending_items]);
+        jsonRes(['ok' => true, 'role' => 'staff', 'trending_items' => $trending_by_category]);
       }
       break;
 
