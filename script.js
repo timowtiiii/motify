@@ -796,38 +796,38 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         const trendThisMonthLastMonth = compareSales(salesThisMonth, salesLastMonth);
 
         container.innerHTML = `
-            <div class="col-md-6 col-lg-3 mb-3">
+            <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales Today</h6>
-                        <h4 class="card-title">₱${salesToday}</h4>
+                        <h2 class="card-title">₱${salesToday}</h2>
                         <p class="card-text">
                             ${trendTodayYesterday} vs yesterday (₱${salesYesterday})
                         </p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3 mb-3">
+            <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales This Month</h6>
-                        <h4 class="card-title">₱${salesThisMonth}</h4>
+                        <h2 class="card-title">₱${salesThisMonth}</h2>
                         <p class="card-text">
                             ${trendThisMonthLastMonth} vs last month (₱${salesLastMonth})
                         </p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3 mb-3">
+            <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Total Sales</h6>
-                        <h4 class="card-title">₱${totalSales}</h4>
+                        <h2 class="card-title">₱${totalSales}</h2>
                         <p class="card-text text-muted">All-time revenue</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-6 mb-3">
+            <div class="col-lg-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Low Stocks (3 or less)</h6>
@@ -842,7 +842,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-6 mb-3">
+            <div class="col-lg-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
