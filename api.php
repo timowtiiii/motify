@@ -53,7 +53,7 @@ try {
 
     // ---------------- SUPPLIERS ----------------
     case 'get_suppliers':
-      $res = $mysqli->query("SELECT id,name,email,phone,location,products FROM suppliers ORDER BY id ASC");
+      $res = $mysqli->query("SELECT id,name,email,phone,location,brands,products FROM suppliers ORDER BY id ASC");
       $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
       jsonRes(['ok'=>true,'suppliers'=>$out]);
       break;
@@ -66,9 +66,10 @@ try {
       $email = trim($_POST['email'] ?? '');
       $phone = trim($_POST['phone'] ?? '');
       $location = trim($_POST['location'] ?? '');
+      $brands = trim($_POST['brands'] ?? '');
       $products = trim($_POST['products'] ?? '');
-      $stmt = $mysqli->prepare("INSERT INTO suppliers (name, email, phone, location, products) VALUES (?, ?, ?, ?, ?)");
-      $stmt->bind_param('sssss',$name, $email, $phone, $location, $products);
+      $stmt = $mysqli->prepare("INSERT INTO suppliers (name, email, phone, location, brands, products) VALUES (?, ?, ?, ?, ?, ?)");
+      $stmt->bind_param('ssssss',$name, $email, $phone, $location, $brands, $products);
       if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
@@ -93,9 +94,10 @@ try {
       $email = trim($_POST['email'] ?? '');
       $phone = trim($_POST['phone'] ?? '');
       $location = trim($_POST['location'] ?? '');
+      $brands = trim($_POST['brands'] ?? '');
       $products = trim($_POST['products'] ?? '');
-      $stmt = $mysqli->prepare("UPDATE suppliers SET name=?, email=?, phone=?, location=?, products=? WHERE id=?");
-      $stmt->bind_param('sssssi', $name, $email, $phone, $location, $products, $id);
+      $stmt = $mysqli->prepare("UPDATE suppliers SET name=?, email=?, phone=?, location=?, brands=?, products=? WHERE id=?");
+      $stmt->bind_param('ssssssi', $name, $email, $phone, $location, $brands, $products, $id);
       if($stmt->execute()) jsonRes(['ok'=>true]);
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
@@ -486,8 +488,118 @@ case 'export_sales_logs':
 
 
     case 'get_dashboard_data':
-      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+      if (is_owner()) {
+        $dashboard_data = [
+            'sales_today' => 0,
+            'sales_yesterday' => 0,
+            'sales_this_month' => 0,
+            'sales_last_month' => 0,
+            'total_sales' => 0,
+            'sales_timeline_data' => [],
+            'low_stocks' => [],
+            'sales_per_branch' => [],
+        ];
+  
+        // Sales Today, Yesterday, This Month, Last Month, Total Sales, Sales Per Branch, Sales Timeline, Low Stocks...
+        // (All existing owner dashboard queries remain here)
+        $sales_today_query = "SELECT SUM(total) AS sales_today FROM receipts WHERE DATE(created_at) = CURDATE()";
+        $sales_today_result = $mysqli->query($sales_today_query);
+        $sales_today_data = $sales_today_result->fetch_assoc();
+        $dashboard_data['sales_today'] = $sales_today_data['sales_today'] ?? 0;
+  
+        $sales_yesterday_query = "SELECT SUM(total) AS sales_yesterday FROM receipts WHERE DATE(created_at) = CURDATE() - INTERVAL 1 DAY";
+        $sales_yesterday_result = $mysqli->query($sales_yesterday_query);
+        $sales_yesterday_data = $sales_yesterday_result->fetch_assoc();
+        $dashboard_data['sales_yesterday'] = $sales_yesterday_data['sales_yesterday'] ?? 0;
+  
+        $sales_this_month_query = "SELECT SUM(total) AS sales_this_month FROM receipts WHERE MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())";
+        $sales_this_month_result = $mysqli->query($sales_this_month_query);
+        $sales_this_month_data = $sales_this_month_result->fetch_assoc();
+        $dashboard_data['sales_this_month'] = $sales_this_month_data['sales_this_month'] ?? 0;
+  
+        $sales_last_month_query = "SELECT SUM(total) AS sales_last_month FROM receipts WHERE MONTH(created_at) = MONTH(CURDATE() - INTERVAL 1 MONTH) AND YEAR(created_at) = YEAR(CURDATE() - INTERVAL 1 MONTH)";
+        $sales_last_month_result = $mysqli->query($sales_last_month_query);
+        $sales_last_month_data = $sales_last_month_result->fetch_assoc();
+        $dashboard_data['sales_last_month'] = $sales_last_month_data['sales_last_month'] ?? 0;
+  
+        $total_sales_query = "SELECT SUM(total) AS total_sales FROM receipts";
+        $total_sales_result = $mysqli->query($total_sales_query);
+        $total_sales_data = $total_sales_result->fetch_assoc();
+        $dashboard_data['total_sales'] = $total_sales_data['total_sales'] ?? 0;
+  
+        $sales_per_branch_query = "SELECT b.name, SUM(r.total) as total_sales FROM receipts r JOIN branches b ON r.branch_id = b.id WHERE r.branch_id IS NOT NULL GROUP BY r.branch_id, b.name ORDER BY total_sales DESC";
+        $sales_per_branch_result = $mysqli->query($sales_per_branch_query);
+        while ($row = $sales_per_branch_result->fetch_assoc()) $dashboard_data['sales_per_branch'][] = $row;
+  
+        $sales_timeline_query = "SELECT DATE(created_at) as date, SUM(total) as sales FROM receipts WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) GROUP BY DATE(created_at) ORDER BY DATE(created_at) ASC";
+        $sales_timeline_result = $mysqli->query($sales_timeline_query);
+        while ($row = $sales_timeline_result->fetch_assoc()) $dashboard_data['sales_timeline_data'][] = ['date' => $row['date'], 'sales' => (float)$row['sales']];
+  
+        $low_stocks_query = "SELECT p.name, ps.size, ps.quantity FROM product_stocks ps JOIN products p ON ps.product_id = p.id WHERE ps.quantity <= 3 ORDER BY ps.quantity ASC, p.name ASC";
+        $low_stocks_result = $mysqli->query($low_stocks_query);
+        while ($row = $low_stocks_result->fetch_assoc()) {
+            $dashboard_data['low_stocks'][] = $row;
+        }
+  
+        jsonRes(array_merge(['ok' => true, 'role' => 'owner'], $dashboard_data));
 
+      } else { // Staff Dashboard
+        $staff_branch_id = $_SESSION['assigned_branch_id'] ?? null;
+        if (!$staff_branch_id) {
+            jsonRes(['ok' => true, 'role' => 'staff', 'trending_items' => []]); // Staff not assigned to a branch
+        }
+
+        $trending_items = [];
+        $sql = "SELECT items FROM receipts WHERE branch_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param('i', $staff_branch_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+
+        $item_sales = [];
+        while ($r = $res->fetch_assoc()) {
+            $items = json_decode($r['items'], true);
+            if (is_array($items)) {
+                foreach ($items as $item) {
+                    $id = intval($item['id']);
+                    $qty = intval($item['qty']);
+                    if (!isset($item_sales[$id])) $item_sales[$id] = 0;
+                    $item_sales[$id] += $qty;
+                }
+            }
+        }
+        arsort($item_sales); // Sort by quantity sold, descending
+        $top_item_ids = array_slice(array_keys($item_sales), 0, 5, true); // Get top 5 IDs
+
+        if (!empty($top_item_ids)) {
+            $ids_placeholder = implode(',', array_fill(0, count($top_item_ids), '?'));
+            $types = str_repeat('i', count($top_item_ids));
+            
+            $product_sql = "SELECT id, name, photo FROM products WHERE id IN ($ids_placeholder)";
+            $product_stmt = $mysqli->prepare($product_sql);
+            $product_stmt->bind_param($types, ...$top_item_ids);
+            $product_stmt->execute();
+            $product_res = $product_stmt->get_result();
+            
+            $products_by_id = [];
+            while ($p_row = $product_res->fetch_assoc()) {
+                $products_by_id[$p_row['id']] = $p_row;
+            }
+
+            foreach ($top_item_ids as $id) {
+                $product = $products_by_id[$id] ?? null;
+                if ($product) $trending_items[] = ['name' => $product['name'], 'qty' => $item_sales[$id], 'photo' => $product['photo'] ? 'uploads/' . $product['photo'] : 'uploads/no-image.png'];
+            }
+        }
+
+        jsonRes(['ok' => true, 'role' => 'staff', 'trending_items' => $trending_items]);
+      }
+      break;
+
+    /* This is a placeholder for the old dashboard implementation, which is now inside the is_owner() block above.
+       The following code is now effectively replaced.
+    */
+    /*
       $dashboard_data = [
           'sales_today' => 0,
           'sales_yesterday' => 0,
@@ -554,19 +666,7 @@ case 'export_sales_logs':
       while ($row = $low_stocks_result->fetch_assoc()) {
           $dashboard_data['low_stocks'][] = $row;
       }
-
-      jsonRes([
-          'ok' => true,
-          'sales_today' => $dashboard_data['sales_today'],
-          'sales_yesterday' => $dashboard_data['sales_yesterday'],
-          'sales_this_month' => $dashboard_data['sales_this_month'],
-          'sales_last_month' => $dashboard_data['sales_last_month'],
-          'total_sales' => $dashboard_data['total_sales'],
-          'low_stocks' => $dashboard_data['low_stocks'],
-          'sales_per_branch' => $dashboard_data['sales_per_branch'],
-          'sales_timeline_data' => $dashboard_data['sales_timeline_data'],
-      ]);
-      break;
+    */
 
     default:
       jsonRes(['ok'=>false,'error'=>'unknown action']);

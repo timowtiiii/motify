@@ -321,6 +321,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <input type="email" class="form-control mb-2" name="email" placeholder="Email">
         <input class="form-control mb-2" name="phone" placeholder="Phone Number">
         <input class="form-control mb-2" name="location" placeholder="Location">
+        <textarea class="form-control mb-2" name="brands" placeholder="Brands"></textarea>
         <textarea class="form-control" name="products" placeholder="Products"></textarea>
       </div>
       <div class="modal-footer">
@@ -341,6 +342,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <input type="email" class="form-control mb-2" name="email" id="editSupplierEmail" placeholder="Email">
         <input class="form-control mb-2" name="phone" id="editSupplierPhone" placeholder="Phone Number">
         <input class="form-control mb-2" name="location" id="editSupplierLocation" placeholder="Location">
+        <textarea class="form-control mb-2" name="brands" id="editSupplierBrands" placeholder="Brands"></textarea>
         <textarea class="form-control" name="products" id="editSupplierProducts" placeholder="Products"></textarea>
       </div>
       <div class="modal-footer">

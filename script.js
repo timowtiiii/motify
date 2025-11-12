@@ -165,10 +165,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                   <div class="size-box" data-size="l">L<br><small>${getStock(p.stocks, 'l')} left</small></div>
                   <div class="size-box" data-size="xl">XL<br><small>${getStock(p.stocks, 'xl')} left</small></div>
                 </div>
-                <div class="regular-stock-display d-none">
-                  <small>Stock: ${getStock(p.stocks, 'os')}</small>
-                </div>
                 <div class="input-group input-group-sm mt-2">
+                  <div class="regular-stock-display d-none input-group-text bg-light border-end-0">
+                    <small>Stock: ${getStock(p.stocks, 'os')}</small>
+                  </div>
                   <input type="number" min="1" value="1" class="form-control qty-input">
                   <button class="btn btn-primary btn-sm add-to-cart-btn">Add</button>
                 </div>
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       container.querySelectorAll('.stock-container').forEach(sc => {
         if (sc.dataset.hasRegularStock === 'true') {
             sc.querySelector('.size-boxes')?.classList.add('d-none');
-            sc.querySelector('.regular-stock-display')?.classList.remove('d-none');
+            sc.querySelector('.regular-stock-display')?.classList.remove('d-none'); // Show stock count
         }
       });
 
@@ -395,10 +395,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <td>${escapeHtml(s.email||'')}</td>
         <td>${escapeHtml(s.phone||'')}</td>
         <td>${escapeHtml(s.location||'')}</td>
+        <td>${escapeHtml(s.brands||'')}</td>
         <td>${escapeHtml(s.products||'')}</td>
         <td><button class="btn btn-sm btn-primary edit-supplier" data-id="${s.id}">Edit</button> <button class="btn btn-sm btn-danger delete-supplier" data-id="${s.id}">Delete</button></td>
       </tr>`).join('');
-      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Location</th><th>Products</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Location</th><th>Brands</th><th>Products</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
       
       document.querySelectorAll('.edit-supplier').forEach(btn=> btn.addEventListener('click', ()=>{
         const id = btn.dataset.id;
@@ -410,6 +411,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         document.getElementById('editSupplierEmail').value = supplier.email;
         document.getElementById('editSupplierPhone').value = supplier.phone;
         document.getElementById('editSupplierLocation').value = supplier.location;
+        document.getElementById('editSupplierBrands').value = supplier.brands;
         document.getElementById('editSupplierProducts').value = supplier.products;
 
         new bootstrap.Modal(document.getElementById('editSupplierModal')).show();
@@ -719,6 +721,35 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         if (!res.ok) {
             container.innerHTML = `<div class="text-danger">Failed to load dashboard: ${escapeHtml(res.error)}</div>`;
             return;
+        }
+
+        // Check role from response and render appropriate dashboard
+        if (res.role === 'staff') {
+            const trendingItems = res.trending_items || [];
+            let staffDashboardHtml = `
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">Hot Deals (Last 30 Days in Your Branch)</h6>
+                            ${trendingItems.length > 0 
+                                ? `<div class="row g-3 mt-2">${trendingItems.map(item => 
+                                    `<div class="col-lg-3 col-md-4 col-sm-6 col-6">
+                                        <div class="card h-100 text-center">
+                                            <img src="${escapeHtml(item.photo)}" class="card-img-top" style="height: 150px; object-fit: cover;">
+                                            <div class="card-body p-2">
+                                                <div class="fw-semibold small">${escapeHtml(item.name)}</div>
+                                                <span class="badge bg-primary rounded-pill mt-2">${item.qty} sold</span>
+                                            </div>
+                                        </div>
+                                    </div>`
+                                ).join('')}</div>`
+                                : '<p class="text-muted mb-0">No sales data available to determine trending items.</p>'
+                            }
+                        </div>
+                    </div>
+                </div>`;
+            container.innerHTML = staffDashboardHtml;
+            return; // Stop further execution for staff
         }
 
         const salesToday = Number(res.sales_today).toFixed(2);
