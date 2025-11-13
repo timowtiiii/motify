@@ -140,6 +140,7 @@ try {
         $products = [];
         while ($r = $res->fetch_assoc()) {
             $img = trim($r['photo']);
+
             if ($img === '') {
                 $r['photo'] = 'uploads/no-image.png';
             } else {
@@ -150,18 +151,43 @@ try {
                 }
             }
             $r['id'] = (int)$r['id'];
+
             $r['price'] = (float)$r['price'];
             $r['branch_id'] = $r['branch_id'] !== null ? (int)$r['branch_id'] : null;
             $r['stocks'] = []; // Initialize stocks array
             $products[$r['id']] = $r;
         }
 
+        // Fetch product stocks and determine stock display type
         if (!empty($products)) {
             $product_ids = implode(',', array_keys($products));
             $stock_sql = "SELECT * FROM product_stocks WHERE product_id IN ($product_ids)";
             $stock_res = $mysqli->query($stock_sql);
             while ($stock_row = $stock_res->fetch_assoc()) {
-                $products[$stock_row['product_id']]['stocks'][] = $stock_row;
+                $stock_row['quantity'] = (int)$stock_row['quantity'];
+                $products[$stock_row['product_id']]['stocks'][] = $stock_row;                
+
+
+            }
+
+            // Determine stock display type for each product based on category and actual stock entries
+            foreach ($products as &$product) { // Use reference to modify original array
+                $has_os_stock = false;
+                $has_size_stocks = false;
+                foreach ($product['stocks'] as $stock) {
+                    if ($stock['size'] === 'os') {
+                        $has_os_stock = true;
+                    } elseif (in_array($stock['size'], ['s', 'm', 'l', 'xl'])) {
+                        $has_size_stocks = true;
+                    }
+                }
+                if ($product['category'] === 'bracket' || $product['category'] === 'topbox') {
+                    $product['stock_display_type'] = 'regular';
+                } elseif ($product['category'] === 'others') {
+                    $product['stock_display_type'] = $has_size_stocks ? 'sizes' : 'regular';
+                } else { // Default for other categories like 'helmet', 'jacket'
+                    $product['stock_display_type'] = 'sizes';
+                }
             }
         }
 
@@ -190,27 +216,43 @@ try {
       $stmt->bind_param('sssdis', $sku,$name,$category,$price,$branch_id,$photo_path);
       if($stmt->execute()) {
         $product_id = $stmt->insert_id;
-        if (isset($_POST['stock_regular'])) {
-            if (isset($_POST['stock_regular'])) {
-                $quantity = intval($_POST['stock_regular']);
+        
+        $stock_type_for_others = $_POST['others_stock_type'] ?? '';
+
+        // Determine which stock type to save
+        $save_regular_stock = ($category === 'bracket' || $category === 'topbox' || ($category === 'others' && $stock_type_for_others === 'regular'));
+        $save_size_stock = ($category === 'helmet' || $category === 'jacket' || ($category === 'others' && $stock_type_for_others === 'sizes'));
+
+        // Insert regular stock if applicable (for 'os' size)
+        if ($save_regular_stock && isset($_POST['stock_regular'])) {
+            $quantity = intval($_POST['stock_regular']);
+            if ($quantity >= 0) {
                 $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
                 $stock_stmt->bind_param('ii', $product_id, $quantity);
                 $stock_stmt->execute();
             }
-        } else {
+        }
+
+        // Insert size-based stock if applicable
+        if ($save_size_stock) {
             $sizes = ['s', 'm', 'l', 'xl'];
             foreach ($sizes as $size) {
                 if (isset($_POST['stock_' . $size])) {
                     $quantity = intval($_POST['stock_' . $size]);
-                    $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
-                    $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
-                    $stock_stmt->execute();
+                    if ($quantity >= 0) {
+                        $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
+                        $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
+                        $stock_stmt->execute();
+                    }
                 }
             }
         }
+        // Always return success if product and stock insertion was attempted
         jsonRes(['ok'=>true,'id'=>$product_id]);
       }
-      jsonRes(['ok'=>false,'error'=>$mysqli->error]);
+      else { // Only return error if the initial product insertion failed
+        jsonRes(['ok'=>false,'error'=>$mysqli->error]);
+      }
       break;
 
     case 'edit_product': // owner only
@@ -246,27 +288,47 @@ try {
       $stmt = $mysqli->prepare($sql);
       if($types!=='') $stmt->bind_param($types, ...$vals);
       if($stmt->execute()) {
-        if (isset($_POST['stock_regular'])) {
-            if (isset($_POST['stock_regular'])) {
-                $quantity = intval($_POST['stock_regular']);
-                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?) ON DUPLICATE KEY UPDATE quantity = ?");
-                $stock_stmt->bind_param('iii', $id, $quantity, $quantity);
+        // Delete all existing stocks for this product to re-insert them cleanly
+        $delete_stocks_stmt = $mysqli->prepare("DELETE FROM product_stocks WHERE product_id = ?");
+        $delete_stocks_stmt->bind_param('i', $id);
+        $delete_stocks_stmt->execute();
+
+        $stock_type_for_others = $_POST['others_stock_type'] ?? '';
+
+        // Determine which stock type to save
+        $save_regular_stock = ($category === 'bracket' || $category === 'topbox' || ($category === 'others' && $stock_type_for_others === 'regular'));
+        $save_size_stock = ($category === 'helmet' || $category === 'jacket' || ($category === 'others' && $stock_type_for_others === 'sizes'));
+
+        // Insert regular stock if applicable (for 'os' size)
+        if ($save_regular_stock && isset($_POST['stock_regular'])) {
+            $quantity = intval($_POST['stock_regular']);
+            if ($quantity >= 0) {
+                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
+                $stock_stmt->bind_param('ii', $id, $quantity);
                 $stock_stmt->execute();
             }
-        } else {
+        }
+
+        // Update size-based stock if applicable
+        if ($save_size_stock) {
             $sizes = ['s', 'm', 'l', 'xl'];
             foreach ($sizes as $size) {
                 if (isset($_POST['stock_' . $size])) {
                     $quantity = intval($_POST['stock_' . $size]);
-                    $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
-                    $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
-                    $stock_stmt->execute();
+                    if ($quantity >= 0) {
+                        $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
+                        $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
+                        $stock_stmt->execute();
+                    }
                 }
             }
         }
+        // Always return success if product and stock update was attempted
         jsonRes(['ok'=>true]);
       }
-      jsonRes(['ok'=>false,'error'=>$mysqli->error]);
+      else { // Only return error if the initial product update failed
+        jsonRes(['ok'=>false,'error'=>$mysqli->error]);
+      }
       break;
 
     case 'delete_product':

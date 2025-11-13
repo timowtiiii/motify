@@ -54,6 +54,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   function escapeHtml(s){ if(s===undefined||s===null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function debounce(fn, ms=250){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 
+  const formatCurrency = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   // Panels
   const panels = {
     dashboard: document.getElementById('panel-dashboard'),
@@ -150,16 +152,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
         return stock ? stock.quantity : 0;
       };
 
-      container.innerHTML = arr.map(p=>`
+     container.innerHTML = arr.map(p=>`
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
           <div class="card h-100">
-            <img src="${escapeHtml(p.photo||'uploads/no-image.png')}" class="card-img-top" style="height:100px;object-fit:cover" alt="${escapeHtml(p.name)}">
+            <img src="${escapeHtml(p.photo || 'uploads/no-image.png')}" class="card-img-top" style="height:100px;object-fit:cover" alt="${escapeHtml(p.name)}">
             <div class="card-body p-1">
               <div class="fw-semibold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
               <div class="small text-muted" style="font-size:0.8em;">${escapeHtml(p.category||'')}</div>
-              <div class="fw-semibold mt-1">₱${Number(p.price||0).toFixed(2)}</div>
-              <div class="mt-2 stock-container" data-product-id="${p.id}" data-has-regular-stock="${p.stocks.some(s => s.size === 'os') ? 'true' : 'false'}">
-                <div class="size-boxes">
+              <div class="fw-semibold mt-1">₱${formatCurrency(p.price||0)}</div>
+              <div class="mt-2 stock-container" data-product-id="${p.id}" data-stock-display-type="${p.stock_display_type || 'regular'}">
+                <div class="size-boxes d-none">
                   <div class="size-box" data-size="s">S<br><small>${getStock(p.stocks, 's')} left</small></div>
                   <div class="size-box" data-size="m">M<br><small>${getStock(p.stocks, 'm')} left</small></div>
                   <div class="size-box" data-size="l">L<br><small>${getStock(p.stocks, 'l')} left</small></div>
@@ -170,24 +172,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <small>Stock: ${getStock(p.stocks, 'os')}</small>
                   </div>
                   <input type="number" min="1" value="1" class="form-control qty-input">
-                  <button class="btn btn-primary btn-sm add-to-cart-btn">Add</button>
+                  <button class="btn btn-primary btn-sm add-to-cart-btn">Add</button> 
                 </div>
               </div>
             </div>
           </div>
         </div>
       `).join('');
-      
+
       container.querySelectorAll('.stock-container').forEach(sc => {
-        if (sc.dataset.hasRegularStock === 'true') {
+        const stockDisplayType = sc.dataset.stockDisplayType;
+        if (stockDisplayType === 'regular') {
             sc.querySelector('.size-boxes')?.classList.add('d-none');
             sc.querySelector('.regular-stock-display')?.classList.remove('d-none'); // Show stock count
+        } else if (stockDisplayType === 'sizes') { // Ensure size boxes are visible and regular stock is hidden for size-based products
+            sc.querySelector('.size-boxes')?.classList.remove('d-none');
+            sc.querySelector('.regular-stock-display')?.classList.add('d-none');
         }
       });
 
       container.querySelectorAll('.size-box').forEach(box => {
         box.addEventListener('click', () => {
-          const productId = box.closest('.stock-container').dataset.productId;
+         const productId = box.closest('.stock-container').dataset.productId;
           // Deselect other boxes for the same product
           container.querySelectorAll(`.stock-container[data-product-id="${productId}"] .size-box`).forEach(b => b.classList.remove('selected'));
           // Select the clicked box
@@ -198,25 +204,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
       container.querySelectorAll('.add-to-cart-btn').forEach(b => b.addEventListener('click', () => {
         const stockContainer = b.closest('.stock-container');
         const id = stockContainer.dataset.productId;
-        const hasRegularStock = stockContainer.dataset.hasRegularStock === 'true';
-        const qty = parseInt(stockContainer.querySelector('.qty-input').value || '1', 10);
+        const stockDisplayType = stockContainer.dataset.stockDisplayType; // Use the new attribute
+        const qty = parseInt(stockContainer.querySelector('.qty-input').value || '1', 10); 
 
-        if (hasRegularStock) {
+        if (stockDisplayType === 'regular') {
             addToCart(id, 'os', qty);
         } else {
             const selectedSizeBox = stockContainer.querySelector('.size-box.selected');
             if (!selectedSizeBox) {
-                alert('Please select a size.');
-                return;
+              alert('Please select a size.'); return;
             }
-            const size = selectedSizeBox.dataset.size;
-            addToCart(id, size, qty);
+            addToCart(id, selectedSizeBox.dataset.size, qty);
         }
-      }));
-    });
+      })); // End of .add-to-cart-btn listener attachment
+    }); // End of api().then()
   }
 
-  document.getElementById('posSearch')?.addEventListener('input', debounce(loadPOSProducts,300));
+  document.getElementById('posSearch')?.addEventListener('input', debounce(loadPOSProducts, 300));
   document.getElementById('posBranchSelect')?.addEventListener('change', loadPOSProducts);
 
   // Inventory list (view-only for staff)
@@ -231,7 +235,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <td>${p.id}</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.category || '')}</td>
-        <td>₱${Number(p.price||0).toFixed(2)}</td>
+        <td>₱${formatCurrency(p.price||0)}</td>
         <td>
           ${(p.stocks && p.stocks.length > 0) 
             ? p.stocks.map(s => `<div>${s.size === 'os' ? 'Stock' : s.size.toUpperCase()}: ${s.quantity}</div>`).join('') 
@@ -515,7 +519,7 @@ const rows = res.sales.map(s=>`<tr>
         <td>${s.id}</td>
         <td>${escapeHtml(s.receipt_no)}</td>
         <td>${escapeHtml(s.products)}</td>
-        <td>₱${Number(s.total||0).toFixed(2)}</td>
+        <td>₱${formatCurrency(s.total||0)}</td>
         <td>${escapeHtml(s.payment_mode)}</td>
         <td>${escapeHtml(s.username||'N/A')}</td>
         <td>${escapeHtml(s.branch_name||'N/A')}</td>
@@ -759,11 +763,11 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
             return; // Stop further execution for staff
         }
 
-        const salesToday = Number(res.sales_today).toFixed(2);
-        const salesYesterday = Number(res.sales_yesterday).toFixed(2);
-        const salesThisMonth = Number(res.sales_this_month).toFixed(2);
-        const salesLastMonth = Number(res.sales_last_month).toFixed(2);
-        const totalSales = Number(res.total_sales).toFixed(2);
+        const salesToday = formatCurrency(res.sales_today);
+        const salesYesterday = formatCurrency(res.sales_yesterday);
+        const salesThisMonth = formatCurrency(res.sales_this_month);
+        const salesLastMonth = formatCurrency(res.sales_last_month);
+        const totalSales = formatCurrency(res.total_sales);
 
         const compareSales = (current, previous) => {
             const currentNum = Number(current);
