@@ -909,6 +909,26 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                     </div>
                 </div>
             </div>
+            <div class="col-12 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">🔥 Trending Products (Last 30 Days)</h6>
+                        ${res.trending_products && res.trending_products.length > 0 ? `
+                        <div class="row g-3 mt-2">${res.trending_products.map(item =>
+                            `<div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 col-6">
+                                <div class="card h-100 text-center">
+                                    <img src="${escapeHtml(item.photo || 'uploads/no-image.png')}" class="card-img-top" style="height: 120px; object-fit: cover;">
+                                    <div class="card-body p-2">
+                                        <div class="fw-semibold small">${escapeHtml(item.name)}</div>
+                                        <span class="badge bg-primary rounded-pill mt-2">${item.qty_sold} sold</span>
+                                    </div>
+                                </div>
+                            </div>`
+                        ).join('')}</div>
+                        ` : '<p class="text-muted mb-0">No sales data available to determine trending products.</p>'}
+                    </div>
+                </div>
+            </div>
         `;
 
         // Sales Trend Chart (Last 30 Days)

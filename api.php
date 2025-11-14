@@ -291,7 +291,9 @@ try {
       $fields[] = "price=?"; $types.='d'; $vals[]=$price;
       if($branch_id===null) $fields[] = "branch_id = NULL";
       else { $fields[] = "branch_id = ?"; $types.='i'; $vals[]=$branch_id;}
-      if($photo_path !== null){ $fields[] = "photo = ?"; $types.='s'; $vals[]=$photo_path; }
+      if ($photo_path !== null) {
+          $fields[] = "photo = ?"; $types.='s'; $vals[] = $photo_path;
+      }
       $sql = "UPDATE products SET ".implode(', ',$fields)." WHERE id=?";
       $types .= 'i'; $vals[] = $id;
       $stmt = $mysqli->prepare($sql);
@@ -656,6 +658,56 @@ case 'export_sales_logs':
         while ($row = $low_stocks_result->fetch_assoc()) {
             $dashboard_data['low_stocks'][] = $row;
         }        
+
+        // --- START: Trending Products (Owner) ---
+        $trending_products_query = "SELECT items FROM receipts WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+        $trending_res = $mysqli->query($trending_products_query);
+
+        $item_sales = [];
+        while ($r = $trending_res->fetch_assoc()) {
+            $items = json_decode($r['items'], true);
+            if (is_array($items)) {
+                foreach ($items as $item) {
+                    $id = intval($item['id']);
+                    if ($id > 0) {
+                        $qty = intval($item['qty']);
+                        if (!isset($item_sales[$id])) $item_sales[$id] = 0;
+                        $item_sales[$id] += $qty;
+                    }
+                }
+            }
+        }
+
+        $dashboard_data['trending_products'] = [];
+        if (!empty($item_sales)) {
+            arsort($item_sales); // Sort by quantity sold, descending
+            $top_product_ids = array_slice(array_keys($item_sales), 0, 15); // Get top 15
+
+            if (!empty($top_product_ids)) {
+                $ids_placeholder = implode(',', array_fill(0, count($top_product_ids), '?'));
+                $types = str_repeat('i', count($top_product_ids));
+                
+                $product_sql = "SELECT id, name, photo FROM products WHERE id IN ($ids_placeholder)";
+                $product_stmt = $mysqli->prepare($product_sql);
+                $product_stmt->bind_param($types, ...$top_product_ids);
+                $product_stmt->execute();
+                $product_res = $product_stmt->get_result();
+
+                while ($p_row = $product_res->fetch_assoc()) {
+                    $p_row['qty_sold'] = $item_sales[$p_row['id']];
+                    // Correct the photo path
+                    $img = trim($p_row['photo'] ?? '');
+                    if ($img === '' || $img === null) {
+                        $p_row['photo'] = 'uploads/no-image.png';
+                    } elseif (strpos($img, '/') === false) {
+                        // Prepend the uploads directory if it's just a filename
+                        $p_row['photo'] = 'uploads/' . $img;
+                    }
+                    $dashboard_data['trending_products'][] = $p_row;
+                }
+            }
+        }
+        // --- END: Trending Products (Owner) ---
 
         // New: Sales Per Branch Timeline (Last 30 Days)
         $sales_per_branch_timeline_query = "SELECT DATE(r.created_at) as date, b.name as branch_name, SUM(r.total) as sales 
