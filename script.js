@@ -374,7 +374,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(!res.ok) return;
       const list = document.getElementById('branchesManage');
       if(!list) return;
-      list.innerHTML = res.branches.map(b=>`<div class="card p-2 mb-2"><div class="d-flex justify-content-between align-items-center"><strong>${escapeHtml(b.name)}</strong><div>${USER_ROLE==='owner'?`<button class='btn btn-sm btn-primary edit-branch' data-id='${b.id}' data-name='${escapeHtml(b.name)}'>Edit</button> <button class='btn btn-sm btn-danger delete-branch' data-id='${b.id}'>Delete</button>`:''}</div></div></div>`).join('');
+      list.innerHTML = res.branches.map(b=>`<div class="list-group-item d-flex justify-content-between align-items-center p-2 mb-2 border rounded"><strong>${escapeHtml(b.name)}</strong><div>${USER_ROLE==='owner'?`<button class='btn btn-sm btn-primary edit-branch' data-id='${b.id}' data-name='${escapeHtml(b.name)}'>Edit</button> <button class='btn btn-sm btn-danger delete-branch' data-id='${b.id}'>Delete</button>`:''}</div></div>`).join('');
       document.querySelectorAll('.edit-branch').forEach(btn=> btn.addEventListener('click', ()=>{ document.getElementById('editBranchId').value=btn.dataset.id; document.getElementById('editBranchName').value=btn.dataset.name; new bootstrap.Modal(document.getElementById('editBranchModal')).show(); }));
       document.querySelectorAll('.delete-branch').forEach(btn=> btn.addEventListener('click', ()=>{ if(!confirm('Delete branch?')) return; const fd=new FormData(); fd.append('id',btn.dataset.id); fetch('api.php?action=delete_branch',{ method:'POST', body:fd }).then(r=>r.json()).then(res=>{ if(res.ok){ loadBranches(); populateBranchSelects(); loadInventory(); } else alert(res.error||'Error'); }); }));
     });
@@ -844,7 +844,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                     </div>
                 </div>
             </div>
-            <div class="col-lg-12 mb-3">
+            <div class="col-lg-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
@@ -863,15 +863,19 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales Trend per Branch (Last 30 Days)</h6>
-                        <canvas id="branch-trends-chart" style="height: 250px;"></canvas>
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="branch-trends-chart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6 mb-3">
+            <div class="col-lg-12 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales Trend (Last 30 Days)</h6>
-                        <canvas id="trends-chart" style="height: 250px;"></canvas>
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="trends-chart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>

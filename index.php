@@ -88,8 +88,9 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <?php endif; ?>
         </div>
         <div class="card p-3">
+          <div class="d-flex flex-row gap-2 mb-3">
             <select id="filterBranch" class="form-select form-select-sm" style="width:220px"></select>
-            <input id="inventorySearch" class="form-control form-control-sm ms-auto" placeholder="Search..." style="width: 200px;">
+            <input id="inventorySearch" class="form-control form-control-sm" placeholder="Search..." style="width: 200px;">
           </div>
           <div id="inventoryContent" class="table-responsive"></div>
         </div>
@@ -100,7 +101,9 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <h4 class="text-primary">Branches</h4>
           <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addBranchModal">➕ Add Branch</button>
         </div>
-        <div id="branchesManage" class="row g-3"></div>
+        <div class="card p-3">
+          <div id="branchesManage" class="table-responsive"></div>
+        </div>
       </div>
 
       <div id="panel-suppliers" class="d-none mb-3">
@@ -108,7 +111,9 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <h4 class="text-primary">Suppliers</h4>
           <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplierModal">➕ Add Supplier</button>
         </div>
-        <div id="suppliersContent" class="table-responsive"></div>
+        <div class="card p-3">
+          <div id="suppliersContent" class="table-responsive"></div>
+        </div>
       </div>
 
       <div id="panel-accounts" class="d-none mb-3">
@@ -130,7 +135,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           </div>
         </div>
         <div class="card p-3">
-          <div id="logsContent"></div>
+          <div id="logsContent" class="table-responsive"></div>
         </div>
       </div>
 
