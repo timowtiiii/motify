@@ -800,6 +800,19 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         const trendThisMonthLastMonth = compareSales(salesThisMonth, salesLastMonth);
 
         container.innerHTML = `
+            ${res.low_stocks.length > 0 ? `
+            <div class="col-12 mb-3">
+                <div class="card border-warning">
+                    <div class="card-body">
+                        <h5 class="card-subtitle mb-2 text-danger">⚠️ Low Stocks (3 or less)</h5>
+                        <ul class="list-group list-group-flush" style="max-height: 150px; overflow-y: auto;">${res.low_stocks.map(item => 
+                                `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
+                                    ${escapeHtml(item.name)} (${item.size.toUpperCase()})
+                                    <span class="badge bg-danger rounded-pill">${item.quantity}</span>
+                                </li>`).join('')}</ul>
+                    </div>
+                </div>
+            </div>` : ''}
             <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card">
                     <div class="card-body">
@@ -831,22 +844,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-subtitle mb-2 text-muted">Low Stocks (3 or less)</h6>
-                        ${res.low_stocks.length > 0 
-                            ? `<ul class="list-group list-group-flush" style="max-height: 150px; overflow-y: auto;">${res.low_stocks.map(item => 
-                                `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
-                                    ${escapeHtml(item.name)} (${item.size.toUpperCase()})
-                                    <span class="badge bg-danger rounded-pill">${item.quantity}</span>
-                                </li>`).join('')}</ul>`
-                            : '<p class="text-muted mb-0">No items with low stock.</p>'
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6 mb-3">
+            <div class="col-lg-12 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
@@ -861,7 +859,15 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                     </div>
                 </div>
             </div>
-            <div class="col-12 mb-3">
+            <div class="col-lg-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Sales Trend per Branch (Last 30 Days)</h6>
+                        <canvas id="branch-trends-chart" style="height: 250px;"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales Trend (Last 30 Days)</h6>
@@ -918,6 +924,67 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         } else {
             document.getElementById('trends-chart').parentElement.innerHTML = '<p class="text-muted mb-0">No sales trend data available for the last 30 days.</p>';
         }
+
+        // New: Sales Trend per Branch Chart
+        const salesPerBranchTimeline = res.sales_per_branch_timeline || [];
+        const branchChartCanvas = document.getElementById('branch-trends-chart');
+        if (salesPerBranchTimeline.length > 0 && branchChartCanvas) {
+            const branchData = {};
+            const dates = [...new Set(salesPerBranchTimeline.map(item => item.date))].sort();
+
+            salesPerBranchTimeline.forEach(item => {
+                if (!branchData[item.branch_name]) {
+                    branchData[item.branch_name] = {};
+                }
+                branchData[item.branch_name][item.date] = parseFloat(item.sales);
+            });
+
+            const branchColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+            let colorIndex = 0;
+
+            const datasets = Object.keys(branchData).map(branchName => {
+                const color = branchColors[colorIndex % branchColors.length];
+                colorIndex++;
+                return {
+                    label: branchName,
+                    data: dates.map(date => branchData[branchName][date] || 0),
+                    borderColor: color,
+                    backgroundColor: color.replace(')', ', 0.2)').replace('rgb', 'rgba'),
+                    tension: 0.4,
+                    fill: false
+                };
+            });
+
+            new Chart(branchChartCanvas, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Sales (₱)' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Date' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        title: { display: false }
+                    }
+                }
+            });
+        } else if (branchChartCanvas) {
+            branchChartCanvas.parentElement.innerHTML = '<p class="text-muted mb-0">No sales trend data available for branches.</p>';
+        }
     });
   }
 
@@ -925,6 +992,54 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
   // We only set the interval after the first load is complete to avoid race conditions
   function setupDashboardAutoRefresh() {
     setInterval(loadDashboard, 15000); // Refresh every 15 seconds
+  }
+
+  // Forgot Password Form Handler
+  const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+  if (forgotPasswordForm) {
+    forgotPasswordForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const email = forgotPasswordForm.querySelector('#email').value;
+      const messageEl = document.getElementById('responseMessage');
+      messageEl.innerHTML = '<div class="alert alert-info">Sending request...</div>';
+
+      api('forgot_password', { method: 'POST', body: new URLSearchParams({ email }) }).then(res => {
+        if (res.ok) {
+          messageEl.innerHTML = `<div class="alert alert-success">${escapeHtml(res.message)}</div>`;
+          forgotPasswordForm.reset();
+        } else {
+          messageEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(res.error || 'An unknown error occurred.')}</div>`;
+        }
+      });
+    });
+  }
+
+  // Reset Password Form Handler
+  const resetPasswordForm = document.getElementById('resetPasswordForm');
+  if (resetPasswordForm) {
+    resetPasswordForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const code = resetPasswordForm.querySelector('#code').value;
+      const password = resetPasswordForm.querySelector('#password').value;
+      const passwordConfirm = resetPasswordForm.querySelector('#password_confirm').value;
+      const messageEl = document.getElementById('responseMessage');
+
+      if (password !== passwordConfirm) {
+        messageEl.innerHTML = '<div class="alert alert-danger">Passwords do not match.</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="alert alert-info">Resetting password...</div>';
+      const fd = new FormData(resetPasswordForm);
+      api('reset_password', { method: 'POST', body: fd }).then(res => {
+        if (res.ok) {
+          messageEl.innerHTML = `<div class="alert alert-success">${escapeHtml(res.message)} You will be redirected to the login page shortly.</div>`;
+          setTimeout(() => window.location.href = 'login.php', 3000);
+        } else {
+          messageEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(res.error || 'An unknown error occurred.')}</div>`;
+        }
+      });
+    });
   }
 
   populateBranchSelects().then(()=>{

@@ -49,6 +49,9 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
           <button class="btn btn-primary">Login</button>
           <a href="register.php" class="btn btn-outline-secondary">Register (owner only)</a>
         </div>
+        <div class="text-center mt-3">
+          <a href="forgot_password.php">Forgot Password?</a>
+        </div>
       </form>
     </div>
   </div>

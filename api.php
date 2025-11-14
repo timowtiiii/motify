@@ -13,6 +13,7 @@ try {
   switch($action){
 
     // ---------------- BRANCHES ----------------
+
     case 'get_branches':
       $res = $mysqli->query("SELECT id,name FROM branches ORDER BY id ASC");
       $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
@@ -51,6 +52,8 @@ try {
       jsonRes(['ok'=>$stmt->execute()]);
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     // ---------------- SUPPLIERS ----------------
     case 'get_suppliers':
       $res = $mysqli->query("SELECT id,name,email,phone,location,brands,products FROM suppliers ORDER BY id ASC");
@@ -68,7 +71,7 @@ try {
       $location = trim($_POST['location'] ?? '');
       $brands = trim($_POST['brands'] ?? '');
       $products = trim($_POST['products'] ?? '');
-      $stmt = $mysqli->prepare("INSERT INTO suppliers (name, email, phone, location, brands, products) VALUES (?, ?, ?, ?, ?, ?)");
+      $stmt = $mysqli->prepare("INSERT INTO suppliers (name, email, phone, location, brands, products, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
       $stmt->bind_param('ssssss',$name, $email, $phone, $location, $brands, $products);
       if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
@@ -101,6 +104,8 @@ try {
       if($stmt->execute()) jsonRes(['ok'=>true]);
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
+
+    // --------------------------------------------------------------------------------------------------------------------
 
     // ---------------- PRODUCTS ----------------
     case 'get_products':
@@ -194,6 +199,8 @@ try {
         jsonRes(['ok' => true, 'products' => array_values($products)]);
         break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     case 'add_product': // owner only
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -212,7 +219,7 @@ try {
         if(move_uploaded_file($_FILES['photo']['tmp_name'],$target)) $photo_path = $fname;
       }
       $sql = "INSERT INTO products (sku,name,category,price,branch_id,photo) VALUES (?,?,?,?,?,?)";
-      $stmt = $mysqli->prepare($sql);
+            $stmt = $mysqli->prepare($sql);
       $stmt->bind_param('sssdis', $sku,$name,$category,$price,$branch_id,$photo_path);
       if($stmt->execute()) {
         $product_id = $stmt->insert_id;
@@ -227,8 +234,8 @@ try {
         if ($save_regular_stock && isset($_POST['stock_regular'])) {
             $quantity = intval($_POST['stock_regular']);
             if ($quantity >= 0) {
-                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
-                $stock_stmt->bind_param('ii', $product_id, $quantity);
+                            $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
+                            $stock_stmt->bind_param('ii', $product_id, $quantity);
                 $stock_stmt->execute();
             }
         }
@@ -240,8 +247,8 @@ try {
                 if (isset($_POST['stock_' . $size])) {
                     $quantity = intval($_POST['stock_' . $size]);
                     if ($quantity >= 0) {
-                        $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
-                        $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
+                            $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
+                            $stock_stmt->bind_param('isi', $product_id, $size, $quantity);
                         $stock_stmt->execute();
                     }
                 }
@@ -254,6 +261,8 @@ try {
         jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       }
       break;
+
+    // --------------------------------------------------------------------------------------------------------------------
 
     case 'edit_product': // owner only
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
@@ -273,7 +282,7 @@ try {
         if(move_uploaded_file($_FILES['photo']['tmp_name'],$target)) $photo_path = $fname;
       }
       // build update
-      $fields = [];
+            $fields = [];
       $types = '';
       $vals = [];
       $fields[] = "sku=?"; $types.='s'; $vals[]=$sku;
@@ -291,8 +300,8 @@ try {
         // Delete all existing stocks for this product to re-insert them cleanly
         $delete_stocks_stmt = $mysqli->prepare("DELETE FROM product_stocks WHERE product_id = ?");
         $delete_stocks_stmt->bind_param('i', $id);
-        $delete_stocks_stmt->execute();
-
+            $delete_stocks_stmt->execute();
+        
         $stock_type_for_others = $_POST['others_stock_type'] ?? '';
 
         // Determine which stock type to save
@@ -303,8 +312,8 @@ try {
         if ($save_regular_stock && isset($_POST['stock_regular'])) {
             $quantity = intval($_POST['stock_regular']);
             if ($quantity >= 0) {
-                $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
-                $stock_stmt->bind_param('ii', $id, $quantity);
+                            $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, 'os', ?)");
+                            $stock_stmt->bind_param('ii', $id, $quantity);
                 $stock_stmt->execute();
             }
         }
@@ -316,8 +325,8 @@ try {
                 if (isset($_POST['stock_' . $size])) {
                     $quantity = intval($_POST['stock_' . $size]);
                     if ($quantity >= 0) {
-                        $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
-                        $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
+                            $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
+                            $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
                         $stock_stmt->execute();
                     }
                 }
@@ -331,6 +340,8 @@ try {
       }
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     case 'delete_product':
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -341,6 +352,8 @@ try {
       jsonRes(['ok'=>$stmt->execute()]);
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     // ---------------- ACCOUNTS ----------------
     case 'get_accounts':
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -348,6 +361,8 @@ try {
       $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
       jsonRes(['ok'=>true,'accounts'=>$out]);
       break;
+
+    // --------------------------------------------------------------------------------------------------------------------
 
     case 'add_user':
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
@@ -367,6 +382,8 @@ try {
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     case 'edit_user':
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -384,6 +401,8 @@ try {
       jsonRes(['ok'=>$stmt->execute()]);
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     case 'delete_user':
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -391,6 +410,8 @@ try {
       $stmt = $mysqli->prepare("DELETE FROM users WHERE id=?"); $stmt->bind_param('i',$id);
       jsonRes(['ok'=>$stmt->execute()]);
       break;
+
+    // --------------------------------------------------------------------------------------------------------------------
 
     // ---------------- LOGS ----------------
     case 'get_logs':
@@ -418,6 +439,8 @@ try {
       }
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
 // ---------------- RECENT/SUMMARY & CHECKOUT ----------------
 case 'get_recent_sales':
   $res = $mysqli->query("SELECT r.*, u.username FROM receipts r LEFT JOIN users u ON r.created_by=u.id ORDER BY r.id DESC LIMIT 10");
@@ -425,12 +448,16 @@ case 'get_recent_sales':
   jsonRes(['ok'=>true,'sales'=>$out]);
   break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
 case 'get_stats':
   $r = $mysqli->query("SELECT COUNT(*) AS cnt FROM products")->fetch_assoc();
   $r2 = $mysqli->query("SELECT IFNULL(SUM(quantity),0) AS total_stock FROM product_stocks")->fetch_assoc();
   $r3 = $mysqli->query("SELECT COUNT(*) AS sales_count FROM receipts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc();
   jsonRes(['ok'=>true,'products'=>intval($r['cnt']),'total_stock'=>floatval($r2['total_stock']),'sales_30d'=>intval($r3['sales_count'])]);
   break;
+
+    // --------------------------------------------------------------------------------------------------------------------
 
 case 'export_sales_logs':
   if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -451,6 +478,8 @@ case 'export_sales_logs':
   }
   jsonRes(['ok'=>true, 'csv'=>$csv]);
   break;
+
+    // --------------------------------------------------------------------------------------------------------------------
 
     case 'checkout':
   if ($method !== 'POST') jsonRes(['ok' => false, 'error' => 'POST required']);
@@ -548,6 +577,8 @@ case 'export_sales_logs':
   }
   break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
 
     case 'get_dashboard_data':
       if (is_owner()) {
@@ -560,6 +591,7 @@ case 'export_sales_logs':
             'sales_timeline_data' => [],
             'low_stocks' => [],
             'sales_per_branch' => [],
+            'sales_per_branch_timeline' => [],
         ];
   
         // Sales Today, Yesterday, This Month, Last Month, Total Sales, Sales Per Branch, Sales Timeline, Low Stocks...
@@ -601,7 +633,22 @@ case 'export_sales_logs':
         $low_stocks_result = $mysqli->query($low_stocks_query);
         while ($row = $low_stocks_result->fetch_assoc()) {
             $dashboard_data['low_stocks'][] = $row;
+        }        
+
+        // New: Sales Per Branch Timeline (Last 30 Days)
+        $sales_per_branch_timeline_query = "SELECT DATE(r.created_at) as date, b.name as branch_name, SUM(r.total) as sales 
+                                            FROM receipts r 
+                                            JOIN branches b ON r.branch_id = b.id 
+                                            WHERE r.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND r.branch_id IS NOT NULL
+                                            GROUP BY DATE(r.created_at), r.branch_id 
+                                            ORDER BY date ASC, branch_name ASC";
+        $sales_per_branch_timeline_result = $mysqli->query($sales_per_branch_timeline_query);
+        while ($row = $sales_per_branch_timeline_result->fetch_assoc()) {
+            $dashboard_data['sales_per_branch_timeline'][] = $row;
         }
+
+        // Sort low stocks to be on top
+        usort($dashboard_data['low_stocks'], fn($a, $b) => $a['quantity'] - $b['quantity']);
   
         jsonRes(array_merge(['ok' => true, 'role' => 'owner'], $dashboard_data));
 
@@ -682,6 +729,8 @@ case 'export_sales_logs':
       }
       break;
 
+    // --------------------------------------------------------------------------------------------------------------------
+
     /* This is a placeholder for the old dashboard implementation, which is now inside the is_owner() block above.
        The following code is now effectively replaced.
     */
@@ -753,6 +802,84 @@ case 'export_sales_logs':
           $dashboard_data['low_stocks'][] = $row;
       }
     */
+
+    // --------------------------------------------------------------------------------------------------------------------
+
+    case 'forgot_password':
+      if ($method !== 'POST') jsonRes(['ok' => false, 'error' => 'POST required']);
+      $email = trim($_POST['email'] ?? '');
+      if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+          jsonRes(['ok' => false, 'error' => 'Invalid email format.']);
+      }
+
+      $stmt = $mysqli->prepare("SELECT id FROM users WHERE username = ? AND role = 'owner' LIMIT 1");
+      $stmt = $mysqli->prepare("SELECT id FROM users WHERE username = ? AND role = 'owner' LIMIT 1"); #username is the email
+      $stmt->bind_param('s', $email);
+      $stmt->execute();
+      $res = $stmt->get_result();
+      $user = $res->fetch_assoc();
+
+      if (!$user) {
+          // To prevent user enumeration, we send a success message even if the email doesn't exist.
+          jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']);
+          jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']); #email is the username
+      }
+
+      $user_id = $user['id'];
+      $verification_code = random_int(100000, 999999); // 6-digit code
+      $expiration_time = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+
+      // Delete any old codes for this user
+      $del_stmt = $mysqli->prepare("DELETE FROM password_reset_requests WHERE user_id = ?");
+      $del_stmt->bind_param('i', $user_id);
+      $del_stmt->execute();
+
+      // Insert new code
+      $ins_stmt = $mysqli->prepare("INSERT INTO password_reset_requests (user_id, verification_code, expiration_time) VALUES (?, ?, ?)");
+      $ins_stmt->bind_param('iss', $user_id, $verification_code, $expiration_time);
+      $ins_stmt->execute();
+
+      // --- Email Sending ---
+      $subject = "Your Password Reset Code";
+      $message = "Your password reset code is: " . $verification_code . "\n";
+      $message .= "This code will expire in 15 minutes.\n";
+      $headers = 'From: no-reply@motify.com' . "\r\n" .
+                 'Reply-To: no-reply@motify.com' . "\r\n" .
+                 'X-Mailer: PHP/' . phpversion();
+      
+      // Note: The mail() function requires a configured mail server (SMTP) on your web server to work.
+      // On a local XAMPP setup, this will likely fail without additional configuration.
+      @mail($email, $subject, $message, $headers);
+
+      jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']);
+      jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']); #email is the username
+      break;
+
+    case 'reset_password':
+      if ($method !== 'POST') jsonRes(['ok' => false, 'error' => 'POST required']);
+      $code = trim($_POST['code'] ?? '');
+      $password = $_POST['password'] ?? '';
+
+      if (empty($code) || empty($password)) jsonRes(['ok' => false, 'error' => 'Code and new password are required.']);
+
+      $stmt = $mysqli->prepare("SELECT user_id FROM password_reset_requests WHERE verification_code = ? AND expiration_time > NOW() LIMIT 1");
+      $stmt->bind_param('s', $code);
+      $stmt->execute();
+      $res = $stmt->get_result();
+      if (!$req = $res->fetch_assoc()) jsonRes(['ok' => false, 'error' => 'Invalid or expired verification code.']);
+
+      $hash = password_hash($password, PASSWORD_DEFAULT);
+      $update_stmt = $mysqli->prepare("UPDATE users SET password = ? WHERE id = ? AND role = 'owner'");
+      $update_stmt->bind_param('si', $hash, $req['user_id']);
+      if ($update_stmt->execute()) {
+        $del_stmt = $mysqli->prepare("DELETE FROM password_reset_requests WHERE user_id = ?");
+        $del_stmt->bind_param('i', $req['user_id']);
+        $del_stmt->execute();
+        jsonRes(['ok' => true, 'message' => 'Password has been reset successfully.']);
+      } else {
+        jsonRes(['ok' => false, 'error' => 'Failed to update password.']);
+      }
+      break;
 
     default:
       jsonRes(['ok'=>false,'error'=>'unknown action']);

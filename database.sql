@@ -68,3 +68,9 @@ CREATE TABLE IF NOT EXISTS suppliers (
   products TEXT DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS password_reset_requests (
+    user_id INT NOT NULL,
+    verification_code VARCHAR(255) NOT NULL,
+    expiration_time DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

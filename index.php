@@ -76,6 +76,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <div class="card p-3">
           <h4 class="text-primary">Dashboard</h4>
           <div id="dashboard-grid" class="row g-3 mt-3"></div>
+
         </div>
       </div>
 
@@ -87,8 +88,6 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <?php endif; ?>
         </div>
         <div class="card p-3">
-          <div class="d-flex mb-2 gap-2 align-items-center">
-            <label for="filterBranch" class="mb-0 me-2">Branch:</label>
             <select id="filterBranch" class="form-select form-select-sm" style="width:220px"></select>
             <input id="inventorySearch" class="form-control form-control-sm ms-auto" placeholder="Search..." style="width: 200px;">
           </div>
