@@ -134,6 +134,21 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
             <button id="showSalesLogs" class="btn btn-outline-secondary btn-sm">Sales Logs</button>
           </div>
         </div>
+        <div class="card p-3 mb-3">
+            <h5 class="card-title">Weekly Sales Report</h5>
+            <p class="card-text small text-muted">Select a week to download the sales report in Excel format.</p>
+            <form action="download_weekly_report.php" method="GET" class="mt-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label for="week-selector" class="form-label">Select Week</label>
+                        <input type="week" id="week-selector" name="week" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-success btn-sm">Download Weekly Report</button>
+                    </div>
+                </div>
+            </form>
+        </div>
         <div class="card p-3">
           <div id="logsContent" class="table-responsive"></div>
         </div>
@@ -469,5 +484,15 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="script.js"></script>
+<script>
+    // Set the default value of the week input to the current week
+    document.addEventListener('DOMContentLoaded', function() {
+        const weekInput = document.getElementById('week-selector');
+        const now = new Date();
+        const year = now.getFullYear();
+        const week = Math.ceil((((now - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
+        if(weekInput) weekInput.value = `${year}-W${String(week).padStart(2, '0')}`;
+    });
+</script>
 </body>
 </html>

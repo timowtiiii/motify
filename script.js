@@ -518,7 +518,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Logs - UPDATED: clearer display
   function loadActionLogs(){ 
-    document.getElementById('downloadExcel').style.display = 'none';
+    const downloadBtn = document.getElementById('downloadExcel');
+    if (downloadBtn) downloadBtn.style.display = 'none';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading action logs...</div>';
@@ -537,7 +538,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
 
   function loadSalesLogs(){ 
-    document.getElementById('downloadExcel').style.display = 'block';
+    const downloadBtn = document.getElementById('downloadExcel');
+    if (downloadBtn) downloadBtn.style.display = 'block';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
