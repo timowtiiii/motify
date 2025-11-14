@@ -834,7 +834,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
             <div class="col-12 mb-3">
                 <div class="card border-warning">
                     <div class="card-body">
-                        <h5 class="card-subtitle mb-2 text-danger">⚠️ Low Stocks (3 or less)</h5>
+                        <h5 class="card-subtitle mb-2 text-danger">⚠️ Low Stocks (5 or less)</h5>
                         <ul class="list-group list-group-flush" style="max-height: 150px; overflow-y: auto;">${res.low_stocks.map(item => 
                                 `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
                                     ${escapeHtml(item.name)} (${item.size.toUpperCase()})

@@ -651,7 +651,7 @@ case 'export_sales_logs':
         $sales_timeline_result = $mysqli->query($sales_timeline_query);
         while ($row = $sales_timeline_result->fetch_assoc()) $dashboard_data['sales_timeline_data'][] = ['date' => $row['date'], 'sales' => (float)$row['sales']];
   
-        $low_stocks_query = "SELECT p.name, ps.size, ps.quantity FROM product_stocks ps JOIN products p ON ps.product_id = p.id WHERE ps.quantity <= 3 ORDER BY ps.quantity ASC, p.name ASC";
+        $low_stocks_query = "SELECT p.name, ps.size, ps.quantity FROM product_stocks ps JOIN products p ON ps.product_id = p.id WHERE ps.quantity <= 5 ORDER BY ps.quantity ASC, p.name ASC";
         $low_stocks_result = $mysqli->query($low_stocks_query);
         while ($row = $low_stocks_result->fetch_assoc()) {
             $dashboard_data['low_stocks'][] = $row;
