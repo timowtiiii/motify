@@ -1055,7 +1055,6 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
   if (resetPasswordForm) {
     resetPasswordForm.addEventListener('submit', e => {
       e.preventDefault();
-      const code = resetPasswordForm.querySelector('#code').value;
       const password = resetPasswordForm.querySelector('#password').value;
       const passwordConfirm = resetPasswordForm.querySelector('#password_confirm').value;
       const messageEl = document.getElementById('responseMessage');

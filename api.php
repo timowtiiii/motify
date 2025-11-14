@@ -847,7 +847,7 @@ case 'export_sales_logs':
       $user_id = $user['id'];
       $username = $user['username'];
       $token = bin2hex(random_bytes(32)); // Generate a more secure token
-      $expiration_time = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+      $expiration_time = date('Y-m-d H:i:s', strtotime('+60 minutes'));
 
       // Update user's password reset token and expiry
       $update_stmt = $mysqli->prepare("UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?");
@@ -892,19 +892,24 @@ case 'export_sales_logs':
       }
       break;
     case 'reset_password':
-      if ($method !== 'POST') jsonRes(['ok' => false, 'error' => 'POST required']);
+      if ($method !== 'POST') {
+          jsonRes(['ok' => false, 'error' => 'POST method is required.']);
+      }
       $code = trim($_POST['code'] ?? '');
       $password = $_POST['password'] ?? '';
 
-      if (empty($code) || empty($password)) jsonRes(['ok' => false, 'error' => 'Code and new password are required.']);
+      if (empty($code) || empty($password)) {
+          jsonRes(['ok' => false, 'error' => 'The reset code and a new password are required.']);
+      }
       
       // Enforce password length on the server-side
       if (strlen($password) < 8) {
           jsonRes(['ok' => false, 'error' => 'Password must be at least 8 characters long.']);
       }
 
-      $stmt = $mysqli->prepare("SELECT id FROM users WHERE password_reset_token = ? AND password_reset_expires > NOW() AND role = 'owner' LIMIT 1");
-      $stmt->bind_param('s', $code);
+      $current_time = date('Y-m-d H:i:s');
+      $stmt = $mysqli->prepare("SELECT id, username FROM users WHERE password_reset_token = ? AND password_reset_expires > ? AND role = 'owner' LIMIT 1");
+      $stmt->bind_param('ss', $code, $current_time);
       $stmt->execute();
       $res = $stmt->get_result();
       $user = $res->fetch_assoc();
