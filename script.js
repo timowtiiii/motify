@@ -1037,7 +1037,9 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
       const messageEl = document.getElementById('responseMessage');
       messageEl.innerHTML = '<div class="alert alert-info">Sending request...</div>';
 
-      api('forgot_password', { method: 'POST', body: new URLSearchParams({ email }) }).then(res => {
+      const fd = new FormData();
+      fd.append('email', email);
+      api('forgot_password', { method: 'POST', body: fd }).then(res => {
         if (res.ok) {
           messageEl.innerHTML = `<div class="alert alert-success">${escapeHtml(res.message)}</div>`;
           forgotPasswordForm.reset();

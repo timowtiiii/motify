@@ -24,18 +24,19 @@ $code = htmlspecialchars($_GET['code'] ?? '');
             <div id="responseMessage" class="mt-3"></div>
 
             <form id="resetPasswordForm" autocomplete="off">
-                <div class="mb-3">
-                    <label for="code" class="form-label">Verification Code</label>
-                    <input type="text" class="form-control" id="code" name="code" value="<?= $code ?>" required>
-                </div>
+                <!-- Hidden input for the reset code -->
+                <input type="hidden" id="code" name="code" value="<?= $code ?>">
+                
                 <div class="mb-3">
                     <label for="password" class="form-label">New Password</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
+                    <input type="password" class="form-control" id="password" name="password" required pattern=".{8,}" title="Password must be at least 8 characters long.">
+                    <div id="password-strength-feedback" class="form-text small mt-1"></div>
                 </div>
                 <div class="mb-3">
                     <label for="password_confirm" class="form-label">Confirm New Password</label>
                     <input type="password" class="form-control" id="password_confirm" name="password_confirm" required>
                 </div>
+
                 <div class="d-grid">
                     <button type="submit" class="btn btn-primary">Reset Password</button>
                 </div>
@@ -48,6 +49,49 @@ $code = htmlspecialchars($_GET['code'] ?? '');
 </div>
 
 <script src="script.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const resetForm = document.getElementById('resetPasswordForm');
+    if (resetForm) {
+        const password = document.getElementById('password');
+        const passwordConfirm = document.getElementById('password_confirm');
+        const messageEl = document.getElementById('responseMessage');
+        const strengthFeedback = document.getElementById('password-strength-feedback');
+
+        const validatePasswords = () => {
+            if (password.value !== passwordConfirm.value) {
+                passwordConfirm.setCustomValidity("Passwords do not match.");
+                messageEl.innerHTML = '<div class="alert alert-warning small">Passwords do not match.</div>';
+            } else {
+                passwordConfirm.setCustomValidity("");
+                if (messageEl.innerHTML.includes('Passwords do not match')) messageEl.innerHTML = '';
+            }
+        };
+
+        const checkStrength = () => {
+            const val = password.value;
+            let strength = 0;
+            if (val.length >= 8) strength++;
+            if (val.match(/[a-z]/) && val.match(/[A-Z]/)) strength++;
+            if (val.match(/\d/)) strength++;
+            if (val.match(/[^a-zA-Z\d]/)) strength++;
+
+            let feedbackText = 'Strength: ';
+            let feedbackColor = 'text-danger';
+
+            if (strength <= 1) feedbackText += 'Weak';
+            else if (strength === 2) { feedbackText += 'Medium'; feedbackColor = 'text-warning'; }
+            else { feedbackText += 'Strong'; feedbackColor = 'text-success'; }
+            
+            strengthFeedback.innerHTML = `<span class="${feedbackColor}">${feedbackText}</span>`;
+        };
+
+        password.addEventListener('input', validatePasswords);
+        passwordConfirm.addEventListener('input', validatePasswords);
+        password.addEventListener('input', checkStrength);
+    }
+});
+</script>
 
 </body>
 </html>

@@ -19,17 +19,17 @@ if (isset($_SESSION['user_id'])) {
     <div class="card shadow-sm">
         <div class="card-body p-4">
             <h4 class="card-title text-center mb-4">Forgot Password</h4>
-            <p class="text-muted text-center">Enter the email address associated with the owner account. A verification code will be sent to you.</p>
+            <p class="text-muted text-center small">Enter the email for the owner account. A password reset link will be sent to you.</p>
             
             <div id="responseMessage" class="mt-3"></div>
 
             <form id="forgotPasswordForm" autocomplete="off">
                 <div class="mb-3">
-                    <label for="email" class="form-label">Email address</label>
+                    <label for="email" class="form-label">Owner Email Address</label>
                     <input type="email" class="form-control" id="email" name="email" required>
                 </div>
                 <div class="d-grid">
-                    <button type="submit" class="btn btn-primary">Send Reset Code</button>
+                    <button type="submit" class="btn btn-primary">Send Reset Link</button>
                 </div>
             </form>
             <div class="text-center mt-3">

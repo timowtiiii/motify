@@ -368,12 +368,12 @@ try {
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $username = trim($_POST['username'] ?? '');
-      $password = $_POST['password'] ?? '';
-      $email = trim($_POST['email'] ?? '');
       $role = ($_POST['role'] ?? 'staff')==='owner' ? 'owner' : 'staff';
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
+      $password = $_POST['password'] ?? '';
+      $email = trim($_POST['email'] ?? '');
       if($username==='' || $password==='') jsonRes(['ok'=>false,'error'=>'missing']);
-      if($role === 'owner' && $email === '') jsonRes(['ok'=>false,'error'=>'Email is required for owner role']);
+      if($role === 'owner' && !filter_var($email, FILTER_VALIDATE_EMAIL)) jsonRes(['ok'=>false,'error'=>'A valid email is required for the owner role.']);
       $stmt = $mysqli->prepare("SELECT id FROM users WHERE username=? LIMIT 1"); $stmt->bind_param('s',$username); $stmt->execute(); $res = $stmt->get_result();
       if($res->fetch_assoc()) jsonRes(['ok'=>false,'error'=>'username exists']);
       $hash = password_hash($password, PASSWORD_DEFAULT);
@@ -396,7 +396,7 @@ try {
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       $password = $_POST['password'] ?? '';
 
-      if($role === 'owner' && $email === '') jsonRes(['ok'=>false,'error'=>'Email is required for owner role']);
+      if($role === 'owner' && !filter_var($email, FILTER_VALIDATE_EMAIL)) jsonRes(['ok'=>false,'error'=>'A valid email is required for the owner role.']);
 
       // Start transaction
       $mysqli->begin_transaction();
@@ -834,69 +834,88 @@ case 'export_sales_logs':
           jsonRes(['ok' => false, 'error' => 'Invalid email format.']);
       }
 
-      $stmt = $mysqli->prepare("SELECT id FROM users WHERE username = ? AND role = 'owner' LIMIT 1");
-      $stmt = $mysqli->prepare("SELECT id FROM users WHERE username = ? AND role = 'owner' LIMIT 1"); #username is the email
-      $stmt->bind_param('s', $email);
-      $stmt->execute();
+      $stmt = $mysqli->prepare("SELECT id, username FROM users WHERE email = ? AND role = 'owner' LIMIT 1");
+      $stmt->bind_param('s', $email); $stmt->execute();
       $res = $stmt->get_result();
       $user = $res->fetch_assoc();
 
       if (!$user) {
-          // To prevent user enumeration, we send a success message even if the email doesn't exist.
-          jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']);
-          jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']); #email is the username
+          // To prevent user enumeration (revealing which emails are registered), we always return a success message.
+          jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset link has been sent.']);
       }
 
       $user_id = $user['id'];
-      $verification_code = random_int(100000, 999999); // 6-digit code
+      $username = $user['username'];
+      $token = bin2hex(random_bytes(32)); // Generate a more secure token
       $expiration_time = date('Y-m-d H:i:s', strtotime('+15 minutes'));
 
-      // Delete any old codes for this user
-      $del_stmt = $mysqli->prepare("DELETE FROM password_reset_requests WHERE user_id = ?");
-      $del_stmt->bind_param('i', $user_id);
-      $del_stmt->execute();
+      // Update user's password reset token and expiry
+      $update_stmt = $mysqli->prepare("UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?");
+      $update_stmt->bind_param('ssi', $token, $expiration_time, $user_id);
+      if (!$update_stmt->execute()) {
+          jsonRes(['ok' => false, 'error' => 'Failed to update password reset token.']);
+      }
 
-      // Insert new code
-      $ins_stmt = $mysqli->prepare("INSERT INTO password_reset_requests (user_id, verification_code, expiration_time) VALUES (?, ?, ?)");
-      $ins_stmt->bind_param('iss', $user_id, $verification_code, $expiration_time);
-      $ins_stmt->execute();
+      // Include PHPMailer
+      require 'src/PHPMailer.php';
+      require 'src/SMTP.php';
+      require 'src/Exception.php';
+
+      $mail = new PHPMailer\PHPMailer\PHPMailer(true);
 
       // --- Email Sending ---
-      $subject = "Your Password Reset Code";
-      $message = "Your password reset code is: " . $verification_code . "\n";
-      $message .= "This code will expire in 15 minutes.\n";
-      $headers = 'From: no-reply@motify.com' . "\r\n" .
-                 'Reply-To: no-reply@motify.com' . "\r\n" .
-                 'X-Mailer: PHP/' . phpversion();
-      
-      // Note: The mail() function requires a configured mail server (SMTP) on your web server to work.
-      // On a local XAMPP setup, this will likely fail without additional configuration.
-      @mail($email, $subject, $message, $headers);
+      try {
+          //Server settings
+          // $mail->SMTPDebug = PHPMailer\PHPMailer\SMTP::DEBUG_SERVER; // Keep this commented out for normal operation
+          $mail->isSMTP();
+          $mail->Host       = 'smtp.gmail.com';  // Gmail SMTP server
+          $mail->SMTPAuth   = true;
+          $mail->Username   = 'timowtisakay@gmail.com';  // Your Gmail address
+          $mail->Password   = 'blahftydaolptdvr';       // Your new App Password
+          $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+          $mail->Port       = 587;
 
-      jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']);
-      jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset code has been sent.']); #email is the username
+          //Recipients
+          $mail->setFrom('timowtisakay@gmail.com', 'Motify Password Reset'); // Your Gmail address
+          $mail->addAddress($email, $username);
+
+          //Content
+          $reset_link = 'http://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/reset_password.php?code=' . $token;
+          $mail->isHTML(true);
+          $mail->Subject = 'Password Reset Request';
+          $mail->Body    = 'Please click the following link to reset your password: <a href="' . $reset_link . '">Reset Password</a>';
+
+          $mail->send();
+          jsonRes(['ok' => true, 'message' => 'If an owner account with that email exists, a password reset link has been sent.']);
+      } catch (Exception $e) {
+          jsonRes(['ok' => false, 'error' => "Message could not be sent. Mailer Error: {$mail->ErrorInfo}"]);
+      }
       break;
-
     case 'reset_password':
       if ($method !== 'POST') jsonRes(['ok' => false, 'error' => 'POST required']);
       $code = trim($_POST['code'] ?? '');
       $password = $_POST['password'] ?? '';
 
       if (empty($code) || empty($password)) jsonRes(['ok' => false, 'error' => 'Code and new password are required.']);
+      
+      // Enforce password length on the server-side
+      if (strlen($password) < 8) {
+          jsonRes(['ok' => false, 'error' => 'Password must be at least 8 characters long.']);
+      }
 
-      $stmt = $mysqli->prepare("SELECT user_id FROM password_reset_requests WHERE verification_code = ? AND expiration_time > NOW() LIMIT 1");
+      $stmt = $mysqli->prepare("SELECT id FROM users WHERE password_reset_token = ? AND password_reset_expires > NOW() AND role = 'owner' LIMIT 1");
       $stmt->bind_param('s', $code);
       $stmt->execute();
       $res = $stmt->get_result();
-      if (!$req = $res->fetch_assoc()) jsonRes(['ok' => false, 'error' => 'Invalid or expired verification code.']);
+      $user = $res->fetch_assoc();
+      if (!$user) {
+          jsonRes(['ok' => false, 'error' => 'Invalid or expired reset code.']);
+      }
 
       $hash = password_hash($password, PASSWORD_DEFAULT);
-      $update_stmt = $mysqli->prepare("UPDATE users SET password = ? WHERE id = ? AND role = 'owner'");
-      $update_stmt->bind_param('si', $hash, $req['user_id']);
-      if ($update_stmt->execute()) {
-        $del_stmt = $mysqli->prepare("DELETE FROM password_reset_requests WHERE user_id = ?");
-        $del_stmt->bind_param('i', $req['user_id']);
-        $del_stmt->execute();
+      $update_stmt = $mysqli->prepare("UPDATE users SET password = ?, password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?");
+      $update_stmt->bind_param('si', $hash, $user['id']);
+      if ($update_stmt->execute() && $update_stmt->affected_rows > 0) {
         jsonRes(['ok' => true, 'message' => 'Password has been reset successfully.']);
       } else {
         jsonRes(['ok' => false, 'error' => 'Failed to update password.']);

@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) DEFAULT NULL,
   role ENUM('owner','staff') NOT NULL DEFAULT 'staff',
   assigned_branch_id INT DEFAULT NULL,
+  password_reset_token VARCHAR(255) DEFAULT NULL,
+  password_reset_expires DATETIME DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (assigned_branch_id) REFERENCES branches(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -68,10 +70,4 @@ CREATE TABLE IF NOT EXISTS suppliers (
   brands TEXT DEFAULT NULL,
   products TEXT DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS password_reset_requests (
-    user_id INT NOT NULL,
-    verification_code VARCHAR(255) NOT NULL,
-    expiration_time DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
