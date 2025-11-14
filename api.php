@@ -357,7 +357,7 @@ try {
     // ---------------- ACCOUNTS ----------------
     case 'get_accounts':
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
-      $res = $mysqli->query("SELECT u.id,u.username,u.role,u.assigned_branch_id,b.name AS branch_name FROM users u LEFT JOIN branches b ON u.assigned_branch_id=b.id ORDER BY u.id DESC");
+      $res = $mysqli->query("SELECT u.id,u.username,u.email,u.role,u.assigned_branch_id,b.name AS branch_name FROM users u LEFT JOIN branches b ON u.assigned_branch_id=b.id ORDER BY u.id DESC");
       $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
       jsonRes(['ok'=>true,'accounts'=>$out]);
       break;
@@ -369,15 +369,17 @@ try {
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $username = trim($_POST['username'] ?? '');
       $password = $_POST['password'] ?? '';
+      $email = trim($_POST['email'] ?? '');
       $role = ($_POST['role'] ?? 'staff')==='owner' ? 'owner' : 'staff';
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       if($username==='' || $password==='') jsonRes(['ok'=>false,'error'=>'missing']);
+      if($role === 'owner' && $email === '') jsonRes(['ok'=>false,'error'=>'Email is required for owner role']);
       $stmt = $mysqli->prepare("SELECT id FROM users WHERE username=? LIMIT 1"); $stmt->bind_param('s',$username); $stmt->execute(); $res = $stmt->get_result();
       if($res->fetch_assoc()) jsonRes(['ok'=>false,'error'=>'username exists']);
       $hash = password_hash($password, PASSWORD_DEFAULT);
-      $sql = "INSERT INTO users (username,password,role,assigned_branch_id,created_at) VALUES (?,?,?,?,NOW())";
+      $sql = "INSERT INTO users (username,password,email,role,assigned_branch_id,created_at) VALUES (?,?,?,?,?,NOW())";
       $stmt = $mysqli->prepare($sql);
-      $stmt->bind_param('sssi', $username,$hash,$role,$branch_id);
+      $stmt->bind_param('ssssi', $username,$hash,$email,$role,$branch_id);
       if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
@@ -389,16 +391,36 @@ try {
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $id = intval($_POST['id'] ?? 0); if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
       $username = trim($_POST['username'] ?? '');
+      $email = trim($_POST['email'] ?? '');
       $role = ($_POST['role'] ?? 'staff') === 'owner' ? 'owner' : 'staff';
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
-      if($branch_id === null) {
-          $sql = "UPDATE users SET username=?, role=?, assigned_branch_id=NULL WHERE id=?";
-          $stmt = $mysqli->prepare($sql); $stmt->bind_param('ssi',$username,$role,$id);
-      } else {
-          $sql = "UPDATE users SET username=?, role=?, assigned_branch_id=? WHERE id=?";
-          $stmt = $mysqli->prepare($sql); $stmt->bind_param('ssii',$username,$role,$branch_id,$id);
+      $password = $_POST['password'] ?? '';
+
+      if($role === 'owner' && $email === '') jsonRes(['ok'=>false,'error'=>'Email is required for owner role']);
+
+      // Start transaction
+      $mysqli->begin_transaction();
+
+      $update_user_sql = "UPDATE users SET username=?, email=?, role=?, assigned_branch_id=? WHERE id=?";
+      $stmt = $mysqli->prepare($update_user_sql);
+      $stmt->bind_param('sssii', $username, $email, $role, $branch_id, $id);
+      $user_updated = $stmt->execute();
+
+      if ($password !== '') {
+          $hash = password_hash($password, PASSWORD_DEFAULT);
+          $update_pass_sql = "UPDATE users SET password=? WHERE id=?";
+          $pass_stmt = $mysqli->prepare($update_pass_sql);
+          $pass_stmt->bind_param('si', $hash, $id);
+          $pass_stmt->execute();
       }
-      jsonRes(['ok'=>$stmt->execute()]);
+
+      if ($user_updated) {
+        $mysqli->commit();
+        jsonRes(['ok' => true]);
+      } else {
+        $mysqli->rollback();
+        jsonRes(['ok' => false, 'error' => $stmt->error]);
+      }
       break;
 
     // --------------------------------------------------------------------------------------------------------------------

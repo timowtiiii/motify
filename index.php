@@ -364,7 +364,11 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-body">
         <input class="form-control mb-2" name="username" placeholder="Username" required>
         <input type="password" class="form-control mb-2" name="password" placeholder="Password" required>
-        <select name="role" class="form-select mb-2">
+        <div id="registerEmailGroup" class="mb-2 d-none">
+          <label for="registerEmail" class="form-label small text-muted">Email (Required for Owner)</label>
+          <input type="email" class="form-control" id="registerEmail" name="email" placeholder="owner@example.com">
+        </div>
+        <select name="role" id="registerRole" class="form-select mb-2">
           <option value="staff">Staff</option>
           <option value="owner">Owner</option>
         </select>
@@ -387,6 +391,10 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-body">
         <input type="hidden" name="id" id="editUserId">
         <input class="form-control mb-2" name="username" id="editUserName" placeholder="Username" required>
+        <div id="editEmailGroup" class="mb-2 d-none">
+          <label for="editUserEmail" class="form-label small text-muted">Email (Required for Owner)</label>
+          <input type="email" class="form-control" id="editUserEmail" name="email" placeholder="owner@example.com">
+        </div>
         <select name="role" class="form-select mb-2" id="editUserRole">
           <option value="staff">Staff</option>
           <option value="owner">Owner</option>
@@ -394,6 +402,8 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         <select name="branch_id" class="form-select mb-2" id="editUserBranchSelect">
           <option value="">-- Assign to branch (optional) --</option>
         </select>
+        <label for="editUserPassword" class="form-label small text-muted">New Password (Optional)</label>
+        <input type="password" class="form-control" id="editUserPassword" name="password" placeholder="Leave blank to keep current password">
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>

@@ -449,7 +449,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(!res.ok) return; 
       const tbl = document.getElementById('accountsContent'); 
       if(!tbl) return; 
-      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Branch</th><th>Actions</th></tr></thead><tbody>${res.accounts.map(a=>`<tr><td>${a.id}</td><td>${escapeHtml(a.username)}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.branch_name||'')}</td><td><button class="btn btn-sm btn-primary edit-account" data-id="${a.id}">Edit</button> <button class="btn btn-sm btn-danger delete-account" data-id="${a.id}">Delete</button></td></tr>`).join('')}</tbody></table>`; 
+      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Branch</th><th>Actions</th></tr></thead><tbody>${res.accounts.map(a=>`<tr><td>${a.id}</td><td>${escapeHtml(a.username)}</td><td>${escapeHtml(a.email||'')}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.branch_name||'')}</td><td><button class="btn btn-sm btn-primary edit-account" data-id="${a.id}">Edit</button> <button class="btn btn-sm btn-danger delete-account" data-id="${a.id}">Delete</button></td></tr>`).join('')}</tbody></table>`; 
       
       document.querySelectorAll('.edit-account').forEach(btn=> btn.addEventListener('click', ()=>{
         const id = btn.dataset.id;
@@ -458,7 +458,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         
         document.getElementById('editUserId').value = user.id;
         document.getElementById('editUserName').value = user.username;
+        document.getElementById('editUserEmail').value = user.email || '';
         document.getElementById('editUserRole').value = user.role;
+        document.getElementById('editUserRole').dispatchEvent(new Event('change')); // Trigger change to show/hide email field
         setTimeout(()=>{ 
             const sel=document.getElementById('editUserBranchSelect'); 
             if(sel) sel.value = user.assigned_branch_id||''; 
@@ -472,7 +474,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // register quick modal for admin
   const registerForm = document.getElementById('registerForm');
-  if(registerForm) registerForm.addEventListener('submit', e=>{ e.preventDefault(); const fd = new FormData(registerForm); fetch('api.php?action=add_user',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide(); loadAccounts(); } else alert(res.error||'Error'); }); });
+  if(registerForm) registerForm.addEventListener('submit', e=>{ 
+    e.preventDefault(); 
+    const fd = new FormData(registerForm); 
+    fetch('api.php?action=add_user',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide(); loadAccounts(); registerForm.reset(); } 
+      else alert(res.error||'Error'); 
+    }); 
+  });
 
   // Edit user form handler
   const editUserForm = document.getElementById('editUserForm');
@@ -485,6 +494,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
         loadAccounts(); 
       } else alert(res.error||'Error'); 
     }); 
+  });
+
+  // Show/hide email field based on role selection
+  document.getElementById('registerRole')?.addEventListener('change', e => {
+    const emailGroup = document.getElementById('registerEmailGroup');
+    if (e.target.value === 'owner') {
+      emailGroup.classList.remove('d-none');
+    } else {
+      emailGroup.classList.add('d-none');
+    }
+  });
+
+  document.getElementById('editUserRole')?.addEventListener('change', e => {
+    const emailGroup = document.getElementById('editEmailGroup');
+    if (e.target.value === 'owner') {
+      emailGroup.classList.remove('d-none');
+    } else {
+      emailGroup.classList.add('d-none');
+    }
   });
 
 
