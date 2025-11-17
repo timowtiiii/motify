@@ -141,8 +141,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const container = document.getElementById('posProducts');
     if(!container) return;
     const q = document.getElementById('posSearch') ? document.getElementById('posSearch').value : '';
+    const category = document.querySelector('#posCategoryFilter .btn.active')?.dataset.category || '';
     const branch = document.getElementById('posBranchSelect') ? document.getElementById('posBranchSelect').value : '';
-    api('get_products',{ params:{ q: q, branch_id: branch, source: 'pos' } }).then(res=>{
+    api('get_products',{ params:{ q: q, category: category, branch_id: branch, source: 'pos' } }).then(res=>{
       if(!res.ok){ container.innerHTML = `<div class="text-danger">Failed to load products: ${escapeHtml(res.error)}</div>`; console.error(res.error); return; }
       const arr = res.products || [];
       if(arr.length===0){ container.innerHTML = '<div class="text-muted">No products found</div>'; return; }
@@ -222,6 +223,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('posSearch')?.addEventListener('input', debounce(loadPOSProducts, 300));
   document.getElementById('posBranchSelect')?.addEventListener('change', loadPOSProducts);
+  document.querySelectorAll('#posCategoryFilter .btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Set active state
+      document.querySelectorAll('#posCategoryFilter .btn').forEach(b => b.classList.remove('btn-secondary', 'active'));
+      document.querySelectorAll('#posCategoryFilter .btn').forEach(b => b.classList.add('btn-outline-secondary'));
+      btn.classList.remove('btn-outline-secondary');
+      btn.classList.add('btn-secondary', 'active');
+      loadPOSProducts();
+    });
+  });
 
   // Inventory list (view-only for staff)
   function loadInventory(){
@@ -253,6 +264,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         document.getElementById('editItemName').value = prod.name;
         const categorySelect = document.getElementById('editItemCategory');
         categorySelect.value = prod.category;
+
+        // Determine if the product uses regular stock ('os') or sized stock
+        const hasRegularStock = prod.stocks.some(s => s.size === 'os');
+        const stockType = hasRegularStock ? 'regular' : 'sizes';
+
         // Manually trigger change to update stock fields visibility
         handleCategoryChange(
             prod.category,
@@ -260,13 +276,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
             document.getElementById('editItemRegularStock'),
             document.getElementById('editItemOthersStockTypeContainer')
         );
-        // If category is 'others', determine which stock type to pre-select
-        if (prod.category === 'others') {
-            const stockTypeSelect = document.getElementById('editItemOthersStockTypeContainer').querySelector('select');
-            const hasRegularStock = prod.stocks.some(s => s.size === 'os');
-            stockTypeSelect.value = hasRegularStock ? 'regular' : 'sizes';
-        }
-        categorySelect.dispatchEvent(new Event('change'));
+
+        // Also trigger the 'others' stock type handler if needed
+        handleOthersStockTypeChange(stockType, document.getElementById('editItemSizeStock'), document.getElementById('editItemRegularStock'));
         document.getElementById('editItemPrice').value = prod.price;
 
         // Reset all stock fields
@@ -875,7 +887,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                 </div>
             </div>
             <div class="col-lg-6 mb-3">
-                <div class="card">
+l                <div class="card h-100">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
                         ${res.sales_per_branch.length > 0 
@@ -890,12 +902,27 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                 </div>
             </div>
             <div class="col-lg-6 mb-3">
-                <div class="card">
+                <div class="card h-100">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales Trend per Branch (Last 30 Days)</h6>
                         <div style="position: relative; height: 250px;">
                             <canvas id="branch-trends-chart"></canvas>
                         </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">📉 Least Sold Products (Last 30 Days)</h6>
+                        ${res.least_sold_products && Object.keys(res.least_sold_products).length > 0 
+                            ? `<ul class="list-group list-group-flush" style="max-height: 150px; overflow-y: auto;">${Object.values(res.least_sold_products).map(item => 
+                                `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
+                                    ${escapeHtml(item.name)}
+                                    <span class="badge bg-secondary rounded-pill">${item.qty_sold} sold</span>
+                                </li>`).join('')}</ul>`
+                            : '<p class="text-muted mb-0">No product data available.</p>'
+                        }
                     </div>
                 </div>
             </div>

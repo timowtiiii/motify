@@ -111,6 +111,7 @@ try {
     case 'get_products':
         $q = trim($_GET['q'] ?? $_REQUEST['q'] ?? '');
         $source = $_GET['source'] ?? ''; // 'pos' or 'inventory'
+        $category = trim($_GET['category'] ?? '');
 
         // branch filter: if staff, default to assigned branch
         $branch = null;
@@ -136,6 +137,10 @@ try {
         if ($q !== '') {
             $q_esc = $mysqli->real_escape_string($q);
             $sql .= " AND (p.name LIKE '%$q_esc%' OR p.sku LIKE '%$q_esc%' OR p.category LIKE '%$q_esc%')";
+        }
+        if ($category !== '') {
+            $cat_esc = $mysqli->real_escape_string($category);
+            $sql .= " AND p.category = '$cat_esc'";
         }
         $sql .= " ORDER BY p.id DESC LIMIT 1000";
         $res = $mysqli->query($sql);
@@ -616,6 +621,7 @@ case 'export_sales_logs':
             'low_stocks' => [],
             'sales_per_branch' => [],
             'sales_per_branch_timeline' => [],
+            'least_sold_products' => [],
         ];
   
         // Sales Today, Yesterday, This Month, Last Month, Total Sales, Sales Per Branch, Sales Timeline, Low Stocks...
@@ -708,6 +714,32 @@ case 'export_sales_logs':
             }
         }
         // --- END: Trending Products (Owner) ---
+
+        // --- START: Least Sold Products (Owner) ---
+        $all_products_query = "SELECT id, name FROM products";
+        $all_products_res = $mysqli->query($all_products_query);
+        $all_product_sales = [];
+        while ($p_row = $all_products_res->fetch_assoc()) {
+            $all_product_sales[$p_row['id']] = ['name' => $p_row['name'], 'qty_sold' => 0];
+        }
+
+        // Use the already fetched sales data from trending products
+        foreach ($item_sales as $id => $qty) {
+            if (isset($all_product_sales[$id])) {
+                $all_product_sales[$id]['qty_sold'] = $qty;
+            }
+        }
+
+        // Sort by quantity sold, ascending
+        uasort($all_product_sales, function($a, $b) {
+            return $a['qty_sold'] <=> $b['qty_sold'];
+        });
+
+        // Get the top 15 least sold products
+        $dashboard_data['least_sold_products'] = array_slice($all_product_sales, 0, 15, true);
+
+
+        // --- END: Least Sold Products (Owner) ---
 
         // New: Sales Per Branch Timeline (Last 30 Days)
         $sales_per_branch_timeline_query = "SELECT DATE(r.created_at) as date, b.name as branch_name, SUM(r.total) as sales 

@@ -163,6 +163,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
             <input id="posSearch" class="form-control form-control-sm" placeholder="Search product..." style="width:260px">
           </div>
         </div>
+        <div id="posCategoryFilter" class="mb-3 d-flex flex-wrap gap-2">
+            <button class="btn btn-sm btn-secondary active" data-category="">All</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="helmet">Helmet</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="jacket">Jacket</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="topbox">Topbox</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="bracket">Bracket</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="others">Others</button>
+        </div>
         <div id="posProducts" class="row g-3"></div>
       </div>
 
