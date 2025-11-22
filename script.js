@@ -57,18 +57,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const formatCurrency = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Panels
+  let inventoryRefreshInterval = null; // For real-time inventory updates
+
   const panels = {
     dashboard: document.getElementById('panel-dashboard'),
     inventory: document.getElementById('panel-inventory'),
     branches: document.getElementById('panel-branches'),
     suppliers: document.getElementById('panel-suppliers'),
     accounts: document.getElementById('panel-accounts'),
+    consignment: document.getElementById('panel-consignment'),
     logs: document.getElementById('panel-logs'),
     pos: document.getElementById('panel-pos')
   };
   function showPanel(name){
     Object.values(panels).forEach(p=>p && p.classList.add('d-none'));
     if(panels[name]) panels[name].classList.remove('d-none');
+    document.body.scrollTop = document.documentElement.scrollTop = 0; // Scroll to top
 
     const menuItems = document.querySelectorAll('.sidebar .list-group-item');
     menuItems.forEach(item => {
@@ -78,14 +82,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
             item.classList.remove('active');
         }
     });
+    
+    // Start/Stop inventory polling based on visible panel
+    if (name === 'inventory') {
+        if (!inventoryRefreshInterval) {
+            console.log('Starting inventory auto-refresh.');
+            inventoryRefreshInterval = setInterval(loadInventory, 10000); // Refresh every 10 seconds
+        }
+    } else {
+        if (inventoryRefreshInterval) {
+            console.log('Stopping inventory auto-refresh.');
+            clearInterval(inventoryRefreshInterval);
+            inventoryRefreshInterval = null;
+        }
+    }
   }
-  ['dashboard','inventory','branches','suppliers','accounts','logs','pos'].forEach(id=>{
-    const el = document.getElementById('menu-'+id);
-    if(!el) return;
-    el.addEventListener('click', ()=> showPanel(id));
-    // ADDED: Default load action logs when logs panel is opened
-    if (id === 'logs') el.addEventListener('click', loadActionLogs);
-    if (id === 'suppliers') el.addEventListener('click', loadSuppliers);
+  ['dashboard','inventory','branches','suppliers','accounts','consignment','logs','pos'].forEach(id=>{
+    const el = document.getElementById('menu-'+id); if(!el) return;
+    el.addEventListener('click', ()=> showPanel(id)); if (id === 'logs') el.addEventListener('click', loadActionLogs); if (id === 'suppliers') el.addEventListener('click', loadSuppliers); if (id === 'consignment') el.addEventListener('click', loadConsignments);
   });
 
   // CART
@@ -136,6 +150,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 
+  function populateSupplierSelects() {
+    return api('get_suppliers').then(res => {
+        if (!res.ok) return;
+        const selects = document.querySelectorAll('.supplier-select');
+        const options = res.suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+        selects.forEach(s => { s.innerHTML = '<option value="">Select Supplier</option>' + options; });
+    });
+  }
+
   // POS products
   function loadPOSProducts(){
     const container = document.getElementById('posProducts');
@@ -160,7 +183,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             <div class="card-body p-1">
               <div class="fw-semibold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
               <div class="small text-muted" style="font-size:0.8em;">${escapeHtml(p.category||'')}</div>
-              <div class="fw-semibold mt-1">₱${formatCurrency(p.price||0)}</div>
+              <div class="fw-semibold mt-1">₱${formatCurrency((p.price||0) * 1.12)}</div>
               <div class="mt-2 stock-container" data-product-id="${p.id}" data-stock-display-type="${p.stock_display_type || 'regular'}">
                 <div class="size-boxes d-none">
                   <div class="size-box" data-size="s">S<br><small>${getStock(p.stocks, 's')} left</small></div>
@@ -173,7 +196,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <small>Stock: ${getStock(p.stocks, 'os')}</small>
                   </div>
                   <input type="number" min="1" value="1" class="form-control qty-input">
-                  <button class="btn btn-primary btn-sm add-to-cart-btn">Add</button> 
+                  <button class="btn btn-primary btn-sm add-to-cart-btn" ${p.stock_display_type === 'regular' && getStock(p.stocks, 'os') <= 0 ? 'disabled' : ''}>Add</button> 
                 </div>
               </div>
             </div>
@@ -199,6 +222,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
           container.querySelectorAll(`.stock-container[data-product-id="${productId}"] .size-box`).forEach(b => b.classList.remove('selected'));
           // Select the clicked box
           box.classList.add('selected');
+
+          // Enable/disable add button based on selected size's stock
+          const addButton = box.closest('.stock-container').querySelector('.add-to-cart-btn');
+          const stockText = box.querySelector('small')?.textContent || '0 left';
+          addButton.disabled = parseInt(stockText, 10) <= 0;
         });
       });
 
@@ -207,15 +235,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const id = stockContainer.dataset.productId;
         const stockDisplayType = stockContainer.dataset.stockDisplayType; // Use the new attribute
         const qty = parseInt(stockContainer.querySelector('.qty-input').value || '1', 10); 
+        
+        // Find the full product object to get stock details
+        const product = res.products.find(p => p.id == id);
+        if (!product) return;
 
         if (stockDisplayType === 'regular') {
+            const stockAvailable = (product.stocks.find(s => s.size === 'os') || {}).quantity || 0;
+            const itemInCart = CART.find(item => item.id == id && item.size === 'os');
+            const qtyInCart = itemInCart ? itemInCart.qty : 0;
+
+            if (qty + qtyInCart > stockAvailable) {
+                alert(`Cannot add. Stock for this item is only ${stockAvailable}. You already have ${qtyInCart} in cart.`);
+                return;
+            }
             addToCart(id, 'os', qty);
         } else {
             const selectedSizeBox = stockContainer.querySelector('.size-box.selected');
             if (!selectedSizeBox) {
               alert('Please select a size.'); return;
             }
-            addToCart(id, selectedSizeBox.dataset.size, qty);
+            const size = selectedSizeBox.dataset.size;
+            const stockAvailable = (product.stocks.find(s => s.size === size) || {}).quantity || 0;
+            const itemInCart = CART.find(item => item.id == id && item.size === size);
+            const qtyInCart = itemInCart ? itemInCart.qty : 0;
+
+            if (qty + qtyInCart > stockAvailable) {
+                alert(`Cannot add. Stock for size ${size.toUpperCase()} is only ${stockAvailable}. You already have ${qtyInCart} in cart.`);
+                return;
+            }
+
+            addToCart(id, size, qty);
         }
       })); // End of .add-to-cart-btn listener attachment
     }); // End of api().then()
@@ -238,24 +288,53 @@ document.addEventListener('DOMContentLoaded', ()=>{
   function loadInventory(){
     const tbl = document.getElementById('inventoryContent'); if(!tbl) return;
     const q = document.getElementById('inventorySearch') ? document.getElementById('inventorySearch').value : '';
+    const category = document.querySelector('#inventoryCategoryFilter .btn.active')?.dataset.category || '';
     const branch = document.getElementById('filterBranch') ? document.getElementById('filterBranch').value : '';
-    api('get_products',{ params:{ q:q, branch_id: branch, source: 'inventory' } }).then(res=>{
+    const stockLevel = document.getElementById('inventoryStockLevelFilter') ? document.getElementById('inventoryStockLevelFilter').value : '';
+    api('get_products',{ params:{ q:q, category: category, branch_id: branch, source: 'inventory', stock_level: stockLevel } }).then(res=>{
       if(!res.ok) { console.error(res.error); return; }
       console.log(res.products);
-      const rows = res.products.map(p=>`<tr>
+
+      const getStockLevelIndicator = (quantity) => {
+        const qty = Number(quantity);
+        let color = 'danger'; // red for 0
+        let width = (qty / 20) * 100; // Max width at 20 items
+
+        if (qty > 10) {
+            color = 'success';
+        } else if (qty > 5) {
+            color = 'info';
+        } else if (qty > 0) {
+            color = 'warning';
+        }
+        if (width > 100) width = 100;
+
+        return `
+          <div class="progress" style="height: 1.25rem;">
+            <div class="progress-bar bg-${color}" role="progressbar" style="width: ${width}%;" aria-valuenow="${qty}" aria-valuemin="0" aria-valuemax="20">
+              <span class="fw-bold">${qty}</span>
+            </div>
+          </div>`;
+      };
+
+      const rows = res.products.map(p => `<tr>
         <td>${p.id}</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.category || '')}</td>
-        <td>₱${formatCurrency(p.price||0)}</td>
-        <td>
-          ${(p.stocks && p.stocks.length > 0) 
-            ? p.stocks.map(s => `<div>${s.size === 'os' ? 'Stock' : s.size.toUpperCase()}: ${s.quantity}</div>`).join('') 
-            : 'N/A'}
+        <td>₱${formatCurrency(p.price || 0)}</td>
+        <td style="min-width: 150px;">
+          ${(p.stocks && p.stocks.length > 0)
+            ? p.stocks.map(s => `<div class="d-flex align-items-center mb-1"><div class="me-2" style="width:50px;">${s.size === 'os' ? 'Stock' : s.size.toUpperCase()}:</div><div class="flex-grow-1">${getStockLevelIndicator(s.quantity)}</div></div>`).join('')
+            : '<span class="text-muted">N/A</span>'}
         </td>
-        <td>${escapeHtml(p.branch_name||'')}</td>
-        <td>${USER_ROLE==='owner'?`<button class="btn btn-sm btn-outline-primary edit-product" data-id="${p.id}">Edit</button> <button class="btn btn-sm btn-danger delete-product" data-id="${p.id}">Delete</button>`:'Read-only'}</td>
+        <td>${(p.consigned_stock && p.consigned_stock > 0)
+            ? `<span class="badge bg-info">Consigned: ${p.consigned_stock}</span>`
+            : ''
+        }</td>
+        <td>${escapeHtml(p.branch_name || '')}</td>
+        <td>${USER_ROLE === 'owner' ? `<button class="btn btn-sm btn-outline-primary edit-product" data-id="${p.id}">Edit</button> <button class="btn btn-sm btn-danger delete-product" data-id="${p.id}">Delete</button>` : 'Read-only'}</td>
       </tr>`).join('');
-      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Branch</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Consignment</th><th>Branch</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
       document.querySelectorAll('.edit-product').forEach(btn=> btn.addEventListener('click', ()=>{
         const id = btn.dataset.id;
         const prod = res.products.find(x=>x.id==id);
@@ -312,6 +391,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
   document.getElementById('inventorySearch')?.addEventListener('input', debounce(loadInventory, 300));
   document.getElementById('filterBranch')?.addEventListener('change', loadInventory);
+  document.getElementById('inventoryStockLevelFilter')?.addEventListener('change', loadInventory);
 
   // Add product form
   const addItemForm = document.getElementById('addItemForm');
@@ -455,6 +535,169 @@ document.addEventListener('DOMContentLoaded', ()=>{
     fetch('api.php?action=edit_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editSupplierModal'))?.hide(); loadSuppliers(); } else alert(res.error||'Error'); });
   });
 
+  // Consignment
+  function loadConsignments() {
+      const tbl = document.getElementById('consignmentContent'); if (!tbl) return;
+      const supplierId = document.getElementById('consignmentSupplierFilter')?.value || '';
+
+      api('get_consignments', { params: { supplier_id: supplierId } }).then(res => {
+          if (!res.ok) { console.error(res.error); tbl.innerHTML = `<div class="text-danger">Failed to load data.</div>`; return; }
+
+          // Calculate total owed based on the value of UNSOLD items from ACTIVE consignments
+          const totalOwed = res.consignments
+              .filter(c => c.status === 'active')
+              .reduce((sum, c) => sum + ((c.quantity_consigned - c.quantity_sold) * c.cost_price), 0);
+          document.getElementById('totalOwed').textContent = formatCurrency(totalOwed);
+
+          const rows = res.consignments.map(c => `<tr>
+              <td>${c.id}</td>
+              <td>${escapeHtml(c.product_name)}</td>
+              <td>${escapeHtml(c.supplier_name)}</td>
+              <td>${escapeHtml(c.branch_name || 'N/A')}</td>
+              <td>${c.quantity_consigned}</td>
+              <td>${c.quantity_sold}</td>
+              <td>₱${formatCurrency(c.cost_price)}</td>
+              <td>₱${formatCurrency((c.quantity_consigned - c.quantity_sold) * c.cost_price)}</td>
+              <td><span class="badge bg-${c.status === 'active' ? 'warning' : 'success'}">${c.status}</span></td>
+              <td>
+                ${c.status === 'active' ? `
+                  <button class="btn btn-sm btn-primary edit-consignment" data-id="${c.id}">Edit</button>
+                  <button class="btn btn-sm btn-success mark-paid" data-id="${c.id}">Mark Paid</button>
+                ` : ''}
+              </td>
+          </tr>`).join('');
+          tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Product</th><th>Supplier</th><th>Branch</th><th>Consigned</th><th>Sold</th><th>Cost Price</th><th>Total Owed</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+          document.querySelectorAll('.edit-consignment').forEach(btn => btn.addEventListener('click', () => {
+              const id = btn.dataset.id;
+              const consignment = res.consignments.find(c => c.id == id);
+              if (!consignment) return;
+
+              document.getElementById('editConsignmentId').value = consignment.id;
+              document.getElementById('editConsignmentProduct').textContent = consignment.product_name;
+              document.getElementById('editConsignmentSupplier').textContent = consignment.supplier_name;
+              document.getElementById('editConsignmentCostPrice').value = consignment.cost_price;
+              document.getElementById('editConsignmentQuantity').value = consignment.quantity_consigned;
+              document.getElementById('editConsignmentQuantity').min = consignment.quantity_sold; // Can't set quantity lower than what's already sold
+
+              new bootstrap.Modal(document.getElementById('editConsignmentModal')).show();
+          }));
+
+          document.querySelectorAll('.mark-paid').forEach(btn => btn.addEventListener('click', () => {
+              if (!confirm('Are you sure you want to mark this as paid? This action cannot be undone.')) return;
+              const id = btn.dataset.id;
+              api('mark_consignment_paid', { method: 'POST', body: { id: id } }).then(res => {
+                  if (res.ok) {
+                      loadConsignments();
+                  } else {
+                      alert(res.error || 'Failed to update status.');
+                  }
+              });
+          }));
+      });
+  }
+
+  document.getElementById('consignmentSupplierFilter')?.addEventListener('change', loadConsignments);
+
+  document.getElementById('addConsignmentBtn')?.addEventListener('click', () => {
+      // Populate products in the modal
+      const productSelect = document.getElementById('consignmentProduct');
+      const branchSelect = document.getElementById('consignmentBranch');
+
+      // Reset and disable product dropdown initially
+      productSelect.innerHTML = '<option value="">Select a branch first</option>';
+      productSelect.disabled = true;
+      branchSelect.innerHTML = '<option value="">Loading branches...</option>';
+
+      // Populate branches first
+      api('get_branches').then(res => {
+          if(res.ok) branchSelect.innerHTML = '<option value="">Select Branch</option>' + res.branches.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+      });
+
+      // Add a one-time event listener for the branch change
+      const branchChangeHandler = () => {
+          const selectedBranchId = branchSelect.value;
+          productSelect.disabled = true;
+
+          if (!selectedBranchId) {
+              productSelect.innerHTML = '<option value="">Select a branch first</option>';
+              return;
+          }
+
+          productSelect.innerHTML = '<option value="">Loading products...</option>';
+          // Fetch products filtered by the selected branch
+          api('get_products', { params: { source: 'inventory', branch_id: selectedBranchId } }).then(res => {
+              if (res.ok) {
+                  productSelect.innerHTML = '<option value="">Select Product</option>' + res.products.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+                  productSelect.disabled = false;
+              }
+          });
+      };
+
+      branchSelect.addEventListener('change', branchChangeHandler);
+
+      new bootstrap.Modal(document.getElementById('addConsignmentModal')).show();
+  });
+
+  const addConsignmentForm = document.getElementById('addConsignmentForm');
+  if (addConsignmentForm) {
+      addConsignmentForm.addEventListener('submit', e => {
+          e.preventDefault();
+          const form = e.target;
+          const productId = form.querySelector('[name="product_id"]').value;
+          const quantity = form.querySelector('[name="quantity_consigned"]').value;
+          const branchId = form.querySelector('[name="branch_id"]').value;
+          const supplierId = form.querySelector('[name="supplier_id"]').value;
+          const costPrice = form.querySelector('[name="cost_price"]').value;
+
+          const payload = {
+            product_id: productId,
+            quantity_consigned: quantity,
+            branch_id: branchId,
+            supplier_id: supplierId,
+            cost_price: costPrice
+          };
+
+          api('add_consignment', { 
+            method: 'POST', 
+            body: payload 
+          }).then(res => {
+              if (res.ok) {
+                  bootstrap.Modal.getInstance(document.getElementById('addConsignmentModal'))?.hide();
+                  form.reset();
+                  loadConsignments();
+                  loadInventory(); // Refresh inventory to reflect new stock
+              } else {
+                  alert(res.error || 'Error adding consignment.');
+              }
+          });
+      });
+  }
+
+  const editConsignmentForm = document.getElementById('editConsignmentForm');
+  if (editConsignmentForm) {
+      editConsignmentForm.addEventListener('submit', e => {
+          e.preventDefault();
+          const fd = new FormData(editConsignmentForm);
+          api('edit_consignment', { method: 'POST', body: fd }).then(res => {
+              if (res.ok) {
+                  bootstrap.Modal.getInstance(document.getElementById('editConsignmentModal'))?.hide();
+                  loadConsignments();
+                  loadInventory(); // Refresh inventory to reflect stock changes
+              } else {
+                  alert(res.error || 'Error updating consignment.');
+              }
+          });
+      });
+  }
+
+  // Restrict phone input fields to numbers and specific signs
+  const restrictPhoneInput = (e) => {
+    e.target.value = e.target.value.replace(/[^0-9\+\-\(\)\s]/g, '');
+  };
+  document.querySelector('#addSupplierForm input[name="phone"]')?.addEventListener('input', restrictPhoneInput);
+  document.getElementById('editSupplierPhone')?.addEventListener('input', restrictPhoneInput);
+
   // Accounts admin panel
   function loadAccounts(){
     api('get_accounts').then(res=>{
@@ -533,6 +776,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const downloadBtn = document.getElementById('downloadExcel');
     if (downloadBtn) downloadBtn.style.display = 'none';
     const el = document.getElementById('logsContent'); 
+    const timeRange = document.getElementById('logsTimeRange')?.value || '';
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading action logs...</div>';
     api('get_logs',{ params:{ type:'action' }}).then(res=>{
@@ -549,13 +793,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }); 
   }
 
-  function loadSalesLogs(){ 
+  function loadSalesLogs(timeRange = ''){
     const downloadBtn = document.getElementById('downloadExcel');
     if (downloadBtn) downloadBtn.style.display = 'block';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
-    api('get_logs',{ params:{ type:'sales' }}).then(res=>{
+    api('get_logs',{ params:{ type:'sales', time_range: timeRange }}).then(res=>{
+
       if(!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load sales logs: ${escapeHtml(res.error||'Unknown error')}</div>`; return; }
 const rows = res.sales.map(s=>`<tr>
         <td>${s.id}</td>
@@ -571,8 +816,10 @@ const rows = res.sales.map(s=>`<tr>
     }); 
   }
 
+  // Event listeners for time range buttons
   document.getElementById('showActionLogs')?.addEventListener('click', loadActionLogs);
   document.getElementById('showSalesLogs')?.addEventListener('click', loadSalesLogs);
+
   document.getElementById('downloadExcel')?.addEventListener('click', ()=>{
     api('export_sales_logs').then(res=>{
       if(res.ok){
@@ -617,7 +864,7 @@ const rows = res.sales.map(s=>`<tr>
             const p = productsById[it.id];
             if (!p) return;
 
-            const line = Number(p.price) * it.qty;
+            const line = Number(p.price * 1.12) * it.qty;
             total += line;
 
             elem.innerHTML += `
@@ -697,6 +944,7 @@ const rows = res.sales.map(s=>`<tr>
         receiptText += "--------------------------------------\n";
         receiptText += `Receipt No: ${res.receipt_no}\n`;
         // Use the returned timestamp for accuracy
+        receiptText += `Cashier: ${escapeHtml(res.username)}\n`;
         receiptText += `Date: ${new Date(res.timestamp).toLocaleString()}\n`; 
         receiptText += "--------------------------------------\n";
         receiptText += "ITEM              QTY   PRICE    TOTAL\n";
@@ -713,12 +961,14 @@ const rows = res.sales.map(s=>`<tr>
         };
 
         (res.items_sold || []).forEach(item => {
-            const lineTotal = item.qty * item.price;
+            const lineTotal = item.qty * item.price; // item.price is now VAT-inclusive from API
             receiptText += formatLine(item.name, item.qty, item.price, lineTotal);
         });
         
         // Footer
         receiptText += "--------------------------------------\n";
+        receiptText += `Vatable Sales:          ₱ ${Number(res.vatable_sales).toFixed(2).padStart(8)}\n`;
+        receiptText += `VAT (12%):              ₱ ${Number(res.vat_amount).toFixed(2).padStart(8)}\n`;
         receiptText += `TOTAL:                  ₱ ${Number(res.total).toFixed(2).padStart(8)}\n`;
         receiptText += `PAYMENT MODE:           ${escapeHtml(res.payment_mode)}\n`;
         receiptText += "--------------------------------------\n";
@@ -757,6 +1007,96 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         printWindow.close();
     }, 250);
 });
+
+  // Function to generate the time range selector based on the selected type
+  function generateTimeRangeSelector() {
+    const container = document.getElementById('logsTimeRangeContainer');
+    if (!container) return;
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+    const week = Math.ceil((((now - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
+
+    container.innerHTML = `
+      <select class="form-select" id="logsTimeRangeType" style="flex: 0 0 100px;">
+        <option value="all">All Time</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly" selected>Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+      <input type="month" class="form-control" id="logsTimeRangeValue" value="${year}-${month}">
+    `;
+
+    const typeSelect = document.getElementById('logsTimeRangeType');
+    const valueInput = document.getElementById('logsTimeRangeValue');
+
+    const updateValueInput = () => {
+        const type = typeSelect.value;
+        let newElement;
+        if (type === 'weekly') {
+            newElement = document.createElement('input');
+            newElement.type = 'week';
+            newElement.value = `${year}-W${String(week).padStart(2, '0')}`;
+        } else if (type === 'monthly') {
+            newElement = document.createElement('input');
+            newElement.type = 'month';
+            newElement.value = `${year}-${month}`;
+        } else if (type === 'yearly') {
+            newElement = document.createElement('select');
+            for (let i = year; i >= 2020; i--) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                newElement.appendChild(option);
+            }
+        } else { // 'all'
+            newElement = document.createElement('input');
+            newElement.type = 'text';
+            newElement.readOnly = true;
+            newElement.classList.add('d-none'); // Hide it for 'All Time'
+        }
+        newElement.id = 'logsTimeRangeValue';
+        newElement.className = 'form-control';
+        valueInput.replaceWith(newElement);
+        newElement.addEventListener('change', () => loadSalesLogs(type, newElement.value));
+        loadSalesLogs(type, newElement.value);
+    };
+
+    typeSelect.addEventListener('change', updateValueInput);
+  }
+
+  function loadSalesLogs(timeRangeType = '', selectedValue = '') {
+    const downloadBtn = document.getElementById('downloadExcel');
+    if (downloadBtn) downloadBtn.style.display = 'block';
+    const el = document.getElementById('logsContent');
+    if (!el) return;
+    el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
+    api('get_logs', { params: { type: 'sales', time_range_type: timeRangeType, time_range_value: selectedValue } }).then(res => {
+      if (!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load sales logs: ${escapeHtml(res.error || 'Unknown error')}</div>`; return; }
+      const rows = res.sales.map(s => `<tr> <td>${s.id}</td> <td>${escapeHtml(s.receipt_no)}</td> <td>${escapeHtml(s.products)}</td> <td>₱${formatCurrency(s.total || 0)}</td> <td>${escapeHtml(s.payment_mode)}</td> <td>${escapeHtml(s.username || 'N/A')}</td> <td>${escapeHtml(s.branch_name || 'N/A')}</td> <td>${escapeHtml(s.created_at)}</td> </tr>`).join('');
+      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Receipt No</th><th>Products</th><th>Total</th><th>Payment</th><th>User</th><th>Branch</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`;
+    });
+  }
+
+  // Initialize the new log filter UI
+  generateTimeRangeSelector();
+
+  // Set active state for log buttons
+  const actionLogBtn = document.getElementById('showActionLogs');
+  const salesLogBtn = document.getElementById('showSalesLogs');
+  const timeRangeContainer = document.getElementById('logsTimeRangeContainer');
+
+  actionLogBtn?.addEventListener('click', () => {
+    timeRangeContainer.classList.add('d-none');
+    actionLogBtn.classList.add('active');
+    salesLogBtn.classList.remove('active');
+  });
+  salesLogBtn?.addEventListener('click', () => {
+    timeRangeContainer.classList.remove('d-none');
+    salesLogBtn.classList.add('active');
+    actionLogBtn.classList.remove('active');
+  });
 
   // Init
   function loadDashboard() {
@@ -887,7 +1227,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                 </div>
             </div>
             <div class="col-lg-6 mb-3">
-l                <div class="card h-100">
+                <div class="card h-100">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
                         ${res.sales_per_branch.length > 0 
@@ -1129,10 +1469,24 @@ l                <div class="card h-100">
     loadInventory();
     loadPOSProducts();
     loadAccounts();
+    populateSupplierSelects();
     loadSuppliers();
     loadDashboard();
     setupDashboardAutoRefresh(); // Start auto-refreshing
     updateCartUI();
+
+    // Correctly attach event listeners for inventory category filters
+    document.querySelectorAll('#inventoryCategoryFilter .btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#inventoryCategoryFilter .btn').forEach(b => {
+          b.classList.remove('btn-secondary', 'active');
+          b.classList.add('btn-outline-secondary');
+        });
+        btn.classList.add('btn-secondary', 'active');
+        btn.classList.remove('btn-outline-secondary');
+        loadInventory();
+      });
+    });
   });
 
 });

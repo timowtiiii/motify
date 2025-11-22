@@ -3,6 +3,7 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 session_start();
+date_default_timezone_set('Asia/Manila');
 
 function jsonRes($d){ echo json_encode($d, JSON_UNESCAPED_UNICODE); exit; }
 function is_owner(){ return (isset($_SESSION['role']) && $_SESSION['role']==='owner'); }
@@ -105,6 +106,124 @@ try {
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
+    // ---------------- CONSIGNMENT ----------------
+    case 'get_consignments':
+      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+      $supplier_id = isset($_GET['supplier_id']) && $_GET['supplier_id'] !== '' ? intval($_GET['supplier_id']) : null;
+      
+      $sql = "SELECT c.*, p.name as product_name, s.name as supplier_name, b.name as branch_name
+              FROM consignments c 
+              JOIN products p ON c.product_id = p.id 
+              JOIN suppliers s ON c.supplier_id = s.id
+              LEFT JOIN branches b ON c.branch_id = b.id";
+      
+      if ($supplier_id) {
+          $sql .= " WHERE c.supplier_id = " . $supplier_id;
+      }
+      
+      $sql .= " ORDER BY c.created_at DESC";
+      
+      $res = $mysqli->query($sql);
+      if (!$res) jsonRes(['ok' => false, 'error' => $mysqli->error]);
+      if (!$res) {
+          error_log("MySQL Error in get_consignments: " . $mysqli->error . " Query: " . $sql);
+          jsonRes(['ok' => false, 'error' => 'Database query failed: ' . $mysqli->error]);
+      }
+      
+      $out = [];
+      while ($r = $res->fetch_assoc()) {
+          // To determine the size, we need to check the product's stock entries
+          $stock_res = $mysqli->query("SELECT size FROM product_stocks WHERE product_id = " . intval($r['product_id']));
+          $sizes = [];
+          while($stock_row = $stock_res->fetch_assoc()){
+            if (!$stock_row) { // Defensive check, though fetch_assoc usually returns false on no more rows
+                error_log("MySQL Error in get_consignments (product_stocks fetch_assoc): " . $mysqli->error . " Product ID: " . intval($r['product_id']));
+                continue; // Skip this stock row if there's an issue
+            }
+            $sizes[] = $stock_row['size'];
+          }
+          if(count($sizes) > 1 && in_array('os', $sizes)){ // if 'os' and other sizes exist, filter out 'os'
+            $sizes = array_filter($sizes, fn($s) => $s !== 'os');
+          }
+
+          $r['size'] = !empty($sizes) ? implode(', ', $sizes) : 'N/A';
+          $out[] = $r;
+      }
+      jsonRes(['ok'=>true,'consignments'=>$out]);
+      break;
+
+    case 'add_consignment':
+        if($method!=='POST' || !is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+        $product_id = intval($_POST['product_id'] ?? 0);
+        $supplier_id = intval($_POST['supplier_id'] ?? 0);
+        $cost_price = floatval($_POST['cost_price'] ?? 0);
+        $branch_id = intval($_POST['branch_id'] ?? 0);
+        $quantity = intval($_POST['quantity_consigned'] ?? 0);
+
+        if (!$product_id || !$supplier_id || !$branch_id || $cost_price <= 0 || $quantity <= 0) jsonRes(['ok' => false, 'error' => 'Invalid input. All fields are required.']);
+
+        $mysqli->begin_transaction();
+
+        // Insert into consignments table
+        $stmt = $mysqli->prepare("INSERT INTO consignments (product_id, supplier_id, branch_id, cost_price, quantity_consigned) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param('iiidi', $product_id, $supplier_id, $branch_id, $cost_price, $quantity);
+        if (!$stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to create consignment record.']); }
+
+        // Update product stock
+        $stock_stmt = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity + ? WHERE product_id = ?");
+        $stock_stmt->bind_param('ii', $quantity, $product_id);
+        if (!$stock_stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to update product stock.']); }
+
+        $mysqli->commit();
+        jsonRes(['ok' => true]);
+        break;
+
+    case 'mark_consignment_paid':
+        if($method!=='POST' || !is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+        $id = intval($_POST['id'] ?? 0);
+        if (!$id) jsonRes(['ok' => false, 'error' => 'Invalid ID.']);
+        $stmt = $mysqli->prepare("UPDATE consignments SET status = 'paid' WHERE id = ?");
+        $stmt->bind_param('i', $id);
+        jsonRes(['ok' => $stmt->execute()]);
+        break;
+
+    case 'edit_consignment':
+        if($method!=='POST' || !is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+        $id = intval($_POST['id'] ?? 0);
+        $cost_price = floatval($_POST['cost_price'] ?? 0);
+        $new_quantity = intval($_POST['quantity_consigned'] ?? 0);
+
+        if (!$id || $cost_price <= 0 || $new_quantity <= 0) jsonRes(['ok' => false, 'error' => 'Invalid input.']);
+
+        $mysqli->begin_transaction();
+
+        // Get current consignment details to calculate stock difference
+        $stmt = $mysqli->prepare("SELECT product_id, quantity_consigned, quantity_sold FROM consignments WHERE id = ?");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $current_consignment = $res->fetch_assoc();
+
+        if (!$current_consignment) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Consignment not found.']); }
+        if ($new_quantity < $current_consignment['quantity_sold']) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'New quantity cannot be less than the quantity already sold (' . $current_consignment['quantity_sold'] . ').']); }
+
+        $product_id = $current_consignment['product_id'];
+        $quantity_diff = $new_quantity - $current_consignment['quantity_consigned'];
+
+        // Update the consignment record
+        $update_stmt = $mysqli->prepare("UPDATE consignments SET cost_price = ?, quantity_consigned = ? WHERE id = ?");
+        $update_stmt->bind_param('dii', $cost_price, $new_quantity, $id);
+        if (!$update_stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to update consignment record.']); }
+
+        // Adjust the product stock based on the difference
+        $stock_stmt = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity + ? WHERE product_id = ?");
+        $stock_stmt->bind_param('ii', $quantity_diff, $product_id);
+        if (!$stock_stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to update product stock.']); }
+
+        $mysqli->commit();
+        jsonRes(['ok' => true]);
+        break;
+
     // --------------------------------------------------------------------------------------------------------------------
 
     // ---------------- PRODUCTS ----------------
@@ -112,6 +231,7 @@ try {
         $q = trim($_GET['q'] ?? $_REQUEST['q'] ?? '');
         $source = $_GET['source'] ?? ''; // 'pos' or 'inventory'
         $category = trim($_GET['category'] ?? '');
+        $stock_level = trim($_GET['stock_level'] ?? '');
 
         // branch filter: if staff, default to assigned branch
         $branch = null;
@@ -129,8 +249,25 @@ try {
             }
         }
 
-        $sql = "SELECT p.id, p.sku, p.name, p.category, p.price, p.branch_id, COALESCE(p.photo, '') AS photo, b.name AS branch_name
-                FROM products p LEFT JOIN branches b ON p.branch_id = b.id WHERE 1=1";
+        $join_clause = "LEFT JOIN branches b ON p.branch_id = b.id";
+        $where_conditions = "1=1";
+
+        if ($stock_level !== '') {
+            $join_clause .= " JOIN product_stocks ps ON p.id = ps.product_id";
+            if ($stock_level === 'low') {
+                $where_conditions .= " AND ps.quantity <= 5 AND ps.quantity > 0";
+            } elseif ($stock_level === 'out') {
+                $where_conditions .= " AND ps.quantity = 0";
+            } elseif ($stock_level === 'high') {
+                $where_conditions .= " AND ps.quantity > 10";
+            }
+        }
+        $sql = "SELECT 
+                    p.id, p.sku, p.name, p.category, p.price, p.branch_id, 
+                    COALESCE(p.photo, '') AS photo, 
+                    b.name AS branch_name,                    
+                    (SELECT SUM(c.quantity_consigned - c.quantity_sold) FROM consignments c WHERE c.product_id = p.id AND c.status = 'active') AS consigned_stock
+                FROM products p $join_clause WHERE $where_conditions";
         if ($branch !== null && $branch !== '') {
             $sql .= " AND p.branch_id = " . intval($branch);
         }
@@ -138,10 +275,18 @@ try {
             $q_esc = $mysqli->real_escape_string($q);
             $sql .= " AND (p.name LIKE '%$q_esc%' OR p.sku LIKE '%$q_esc%' OR p.category LIKE '%$q_esc%')";
         }
-        if ($category !== '') {
+        if ($category === 'consignment') {
+            // Special filter: show products that have an active consignment record.
+            $sql .= " AND EXISTS (SELECT 1 FROM consignments c WHERE c.product_id = p.id AND c.status = 'active')";
+        } elseif ($category !== '') {
             $cat_esc = $mysqli->real_escape_string($category);
             $sql .= " AND p.category = '$cat_esc'";
         }
+        // Add GROUP BY to avoid duplicate products when joining with product_stocks
+        if ($stock_level !== '') {
+            $sql .= " GROUP BY p.id";
+        }
+
         $sql .= " ORDER BY p.id DESC LIMIT 1000";
         $res = $mysqli->query($sql);
         if ($res === false) {
@@ -446,19 +591,38 @@ try {
     case 'get_logs':
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $type = $_GET['type'] ?? 'action'; // action or sales
+      $time_range_type = $_GET['time_range_type'] ?? ''; // weekly, monthly, yearly
+      $time_range_value = $_GET['time_range_value'] ?? ''; // The selected week, month, or year
+
       if($type==='sales'){
-        $res = $mysqli->query("SELECT s.*, u.username, b.name AS branch_name FROM receipts s LEFT JOIN users u ON s.created_by=u.id LEFT JOIN branches b ON s.branch_id=b.id ORDER BY s.id DESC LIMIT 200");
-        $out=[]; 
-        while($r=$res->fetch_assoc()) {
-          $items = json_decode($r['items'], true);
-          $product_names = [];
-          if (is_array($items)) {
-            foreach ($items as $item) {
-              $product_names[] = $item['name'];
+        $sql = "SELECT s.*, u.username, b.name AS branch_name FROM receipts s LEFT JOIN users u ON s.created_by=u.id LEFT JOIN branches b ON s.branch_id=b.id WHERE 1=1";
+
+        if ($time_range_type === 'weekly' && preg_match('/^\d{4}-W\d{2}$/', $time_range_value)) {
+          $year = (int)substr($time_range_value, 0, 4);
+          $week = (int)substr($time_range_value, 6, 2);
+          $date = new DateTime();
+          $date->setISODate($year, $week);
+          $start_date = $date->format('Y-m-d');
+          $date->modify('+6 days');
+          $end_date = $date->format('Y-m-d');
+          $sql .= " AND s.created_at BETWEEN '$start_date 00:00:00' AND '$end_date 23:59:59'";
+        } elseif ($time_range_type === 'monthly' && preg_match('/^\d{4}-\d{2}$/', $time_range_value)) {
+          $sql .= " AND DATE_FORMAT(s.created_at, '%Y-%m') = '$time_range_value'";
+        } elseif ($time_range_type === 'yearly' && preg_match('/^\d{4}$/', $time_range_value)) {
+          $sql .= " AND YEAR(s.created_at) = '$time_range_value'";
+        }
+
+        $sql .= " ORDER BY s.id DESC LIMIT 200";
+        $res = $mysqli->query($sql);
+        $out = [];
+        while ($r = $res->fetch_assoc()) {
+            $items = json_decode($r['items'], true);
+            $product_names = [];
+            if (is_array($items)) {
+                foreach ($items as $item) { $product_names[] = $item['name']; }
             }
-          }
-          $r['products'] = implode(', ', $product_names);
-          $out[]=$r;
+            $r['products'] = implode(', ', $product_names);
+            $out[] = $r;
         }
         jsonRes(['ok'=>true,'sales'=>$out]);
       } else {
@@ -548,22 +712,60 @@ case 'export_sales_logs':
     $stock_res = $stock_stmt->get_result();
     $stock_row = $stock_res->fetch_assoc();
 
-    if ($qty > $stock_row['quantity']) $qty = $stock_row['quantity'];
+    if (!$stock_row || $qty > $stock_row['quantity']) {
+        $qty = $stock_row ? $stock_row['quantity'] : 0;
+    }
     if ($qty <= 0) continue;
 
-    $line = floatval($row['price']) * $qty;
+    $line = (floatval($row['price']) * 1.12) * $qty; // Use VAT-inclusive price for line total
     $total += $line;
     $detailed[] = [
       'id' => intval($row['id']),
       'name' => $row['name'],
       'qty' => $qty,
       'size' => $size,
-      'price' => floatval($row['price'])
+      'price' => floatval($row['price']) * 1.12 // Return VAT-inclusive price
     ];
 
     $stmt2 = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity - ? WHERE product_id=? AND size = ? AND quantity >= ?");
     $stmt2->bind_param('iisi', $qty, $pid, $size, $qty);
     $stmt2->execute();
+
+    // --- START CONSIGNMENT UPDATE ---
+    // Find active consignments for the sold product and update them.
+    $qty_to_process = $qty;
+    $active_consignments_stmt = $mysqli->prepare(
+        "SELECT id, quantity_consigned, quantity_sold 
+         FROM consignments 
+         WHERE product_id = ? AND status = 'active' AND quantity_sold < quantity_consigned 
+         ORDER BY created_at ASC"
+    );
+    $active_consignments_stmt->bind_param('i', $pid);
+    $active_consignments_stmt->execute();
+    $active_consignments_res = $active_consignments_stmt->get_result();
+
+    $update_sold_stmt = $mysqli->prepare("UPDATE consignments SET quantity_sold = ? WHERE id = ?");
+    $mark_paid_stmt = $mysqli->prepare("UPDATE consignments SET status = 'paid' WHERE id = ?");
+
+    while ($c = $active_consignments_res->fetch_assoc()) {
+        if ($qty_to_process <= 0) break;
+
+        $remaining_in_batch = $c['quantity_consigned'] - $c['quantity_sold'];
+        $deduct_from_this_batch = min($qty_to_process, $remaining_in_batch);
+
+        $new_sold_qty = $c['quantity_sold'] + $deduct_from_this_batch;
+        $update_sold_stmt->bind_param('ii', $new_sold_qty, $c['id']);
+        $update_sold_stmt->execute();
+
+        // If this batch is now fully sold, mark it as paid.
+        if ($new_sold_qty >= $c['quantity_consigned']) {
+            $mark_paid_stmt->bind_param('i', $c['id']);
+            $mark_paid_stmt->execute();
+        }
+
+        $qty_to_process -= $deduct_from_this_batch;
+    }
+    // --- END CONSIGNMENT UPDATE ---
 
     if ($stmt2->affected_rows <= 0) {
       $mysqli->rollback();
@@ -578,10 +780,11 @@ case 'export_sales_logs':
 
   $receipt_no = 'RCPT-' . strtoupper(uniqid());
   $items_json = json_encode($detailed, JSON_UNESCAPED_UNICODE);
+  $current_time = date('Y-m-d H:i:s'); // Use PHP-generated time
 
   $stmt = $mysqli->prepare("INSERT INTO receipts (receipt_no, items, total, payment_mode, branch_id, created_by, created_at)
-                            VALUES (?, ?, ?, ?, ?, ?, NOW())");
-  $stmt->bind_param('ssdsii', $receipt_no, $items_json, $total, $payment, $branch_id, $user_id);
+                            VALUES (?, ?, ?, ?, ?, ?, ?)");
+  $stmt->bind_param('ssdsiis', $receipt_no, $items_json, $total, $payment, $branch_id, $user_id, $current_time);
 
   if ($stmt->execute()) {
     // ✅ Log action
@@ -591,14 +794,22 @@ case 'export_sales_logs':
     $log->execute();
 
     $mysqli->commit();
-    // UPDATED: Include detailed items, payment mode, and timestamp in the response
+
+    // Calculate VAT details assuming the total is VAT-inclusive
+    $vat_rate = 0.12; // 12%
+    $vatable_sales = $total / (1 + $vat_rate);
+    $vat_amount = $total - $vatable_sales;
+
     jsonRes([
         'ok' => true, 
         'receipt_no' => $receipt_no, 
         'total' => $total, 
         'items_sold' => $detailed, 
         'payment_mode' => $payment, 
-        'timestamp' => date('Y-m-d H:i:s')
+        'timestamp' => $current_time,
+        'username' => $_SESSION['username'] ?? 'N/A',
+        'vatable_sales' => $vatable_sales,
+        'vat_amount' => $vat_amount
     ]);
   } else {
     $mysqli->rollback();

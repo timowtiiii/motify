@@ -15,9 +15,9 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="style.css" rel="stylesheet">
   <style>
-    .sidebar { width: 80px; }
+    .sidebar { width: 100px; }
     .sidebar .list-group-item { text-align: center; padding: 0.75rem 0.5rem; }
-    .sidebar .list-group-item span { display: block; font-size: 0.65rem; margin-top: 5px; }
+    .sidebar .list-group-item span { display: block; font-size: 0.7rem; margin-top: 5px; }
     .sidebar .list-group-item svg { width: 24px; height: 24px; }
     .main-content { flex-grow: 1; }
     .container-fluid.d-flex { min-height: calc(100vh - 56px); }
@@ -59,6 +59,10 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
             <span>Suppliers</span>
           </button>
+          <button class="list-group-item list-group-item-action" id="menu-consignment" title="Consignment">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-seam" viewBox="0 0 16 16"><path d="M8.186 1.113a.5.5 0 0 0-.372 0L1.846 3.5 8 5.961 14.154 3.5 8.186 1.113zM15 4.239l-6.5 2.6v7.922l6.5-2.6V4.24zM7.5 14.762V6.838L1 4.239v7.923l6.5 2.6zM7.443.184a1.5 1.5 0 0 1 1.114 0l7.129 2.852A.5.5 0 0 1 16 3.5v8.662a1 1 0 0 1-.629.928l-7.185 2.874a.5.5 0 0 1-.372 0L.63 13.09a1 1 0 0 1-.63-.928V3.5a.5.5 0 0 1 .314-.464L7.443.184z"/></svg>
+            <span>Consignment</span>
+          </button>
           <button class="list-group-item list-group-item-action" id="menu-accounts" title="Accounts">
             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
             <span>Accounts</span>
@@ -88,8 +92,21 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <?php endif; ?>
         </div>
         <div class="card p-3">
+          <div id="inventoryCategoryFilter" class="mb-3 d-flex flex-wrap gap-2">
+            <button class="btn btn-sm btn-secondary active" data-category="helmet">Helmet</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="jacket">Jacket</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="topbox">Topbox</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="bracket">Bracket</button>
+            <button class="btn btn-sm btn-outline-secondary" data-category="others">Others</button>
+          </div>
           <div class="d-flex flex-row gap-2 mb-3">
             <select id="filterBranch" class="form-select form-select-sm" style="width:220px"></select>
+            <select id="inventoryStockLevelFilter" class="form-select form-select-sm" style="width:220px">
+                <option value="">All Stock Levels</option>
+                <option value="high">High Stock</option>
+                <option value="low">Low Stock (5 or less)</option>
+                <option value="out">Out of Stock</option>
+            </select>
             <input id="inventorySearch" class="form-control form-control-sm" placeholder="Search..." style="width: 200px;">
           </div>
           <div id="inventoryContent" class="table-responsive"></div>
@@ -116,6 +133,38 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         </div>
       </div>
 
+      <div id="panel-consignment" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+              <h4 class="text-primary">Consignment Management</h4>
+              <button class="btn btn-primary" id="addConsignmentBtn">Add Consignment</button>
+          </div>
+  
+          <div class="card mb-3">
+              <div class="card-body">
+                  <div class="row g-3 align-items-center">
+                      <div class="col-md-4">
+                          <label for="consignmentSupplierFilter" class="form-label">Filter by Supplier</label>
+                          <select class="form-select supplier-select" id="consignmentSupplierFilter"></select>
+                      </div>
+                      <div class="col-md-4">
+                          <label class="form-label">Total Owed to Suppliers</label>
+                          <h4 class="mb-0">₱<span id="totalOwed">0.00</span></h4>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <div class="card">
+              <div class="card-header">
+                  Consigned Items
+              </div>
+              <div class="card-body" id="consignmentContent">
+                  <!-- Consignment list will be loaded here by script.js -->
+                  <div class="text-center text-muted">Loading consignments...</div>
+              </div>
+          </div>
+      </div>
+
       <div id="panel-accounts" class="d-none mb-3">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h4 class="text-primary">Accounts</h4>
@@ -128,10 +177,15 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
       <div id="panel-logs" class="d-none mb-3"><div class="d-flex justify-content-between align-items-center mb-2">
           <h4 class="text-primary">Logs</h4>
-          <div class="btn-group">
-            <button id="downloadExcel" class="btn btn-outline-success btn-sm" style="display: none;">Download Excel</button>
-            <button id="showActionLogs" class="btn btn-outline-secondary btn-sm">Action Logs</button>
-            <button id="showSalesLogs" class="btn btn-outline-secondary btn-sm">Sales Logs</button>
+          <div class="d-flex align-items-center">
+            <div id="logButtons" class="btn-group">
+              <button id="downloadExcel" class="btn btn-outline-success btn-sm" style="display: none;">Download Excel</button>
+              <button id="showActionLogs" class="btn btn-outline-secondary btn-sm">Action Logs</button>
+              <button id="showSalesLogs" class="btn btn-outline-secondary btn-sm active">Sales Logs</button>
+            </div>
+            <div id="logsTimeRangeContainer" class="input-group input-group-sm ms-2" style="width: 300px;">
+              <!-- This container will be populated by script.js -->
+            </div>
           </div>
         </div>
         <div class="card p-3 mb-3">
@@ -345,8 +399,8 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-header"><h5 class="modal-title">Add Supplier</h5></div>
       <div class="modal-body">
         <input class="form-control mb-2" name="supplier_name" placeholder="Supplier Name" required>
-        <input type="email" class="form-control mb-2" name="email" placeholder="Email">
-        <input class="form-control mb-2" name="phone" placeholder="Phone Number">
+        <input type="email" class="form-control mb-2" name="email" placeholder="Email (optional)">
+        <input type="tel" class="form-control mb-2" name="phone" placeholder="Phone Number (e.g., +63 912 345 6789)" pattern="[0-9\+\-\(\)\s]*" title="Numbers and signs like +, -, () are allowed.">
         <input class="form-control mb-2" name="location" placeholder="Location">
         <textarea class="form-control mb-2" name="brands" placeholder="Brands"></textarea>
         <textarea class="form-control" name="products" placeholder="Products"></textarea>
@@ -366,8 +420,8 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-body">
         <input type="hidden" name="id" id="editSupplierId">
         <input class="form-control mb-2" name="supplier_name" id="editSupplierName" placeholder="Supplier Name" required>
-        <input type="email" class="form-control mb-2" name="email" id="editSupplierEmail" placeholder="Email">
-        <input class="form-control mb-2" name="phone" id="editSupplierPhone" placeholder="Phone Number">
+        <input type="email" class="form-control mb-2" name="email" id="editSupplierEmail" placeholder="Email (optional)">
+        <input type="tel" class="form-control mb-2" name="phone" id="editSupplierPhone" placeholder="Phone Number (e.g., +63 912 345 6789)" pattern="[0-9\+\-\(\)\s]*" title="Numbers and signs like +, -, () are allowed.">
         <input class="form-control mb-2" name="location" id="editSupplierLocation" placeholder="Location">
         <textarea class="form-control mb-2" name="brands" id="editSupplierBrands" placeholder="Brands"></textarea>
         <textarea class="form-control" name="products" id="editSupplierProducts" placeholder="Products"></textarea>
@@ -378,6 +432,84 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       </div>
     </form>
   </div>
+</div>
+
+<!-- Add Consignment Modal -->
+<div class="modal fade" id="addConsignmentModal" tabindex="-1" aria-labelledby="addConsignmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addConsignmentModalLabel">Add New Consignment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="addConsignmentForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="consignmentSupplier" class="form-label">Supplier</label>
+                        <select class="form-select supplier-select" id="consignmentSupplier" name="supplier_id" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="consignmentBranch" class="form-label">Assign to Branch</label>
+                        <select class="form-select" id="consignmentBranch" name="branch_id" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="consignmentProduct" class="form-label">Product</label>
+                        <select class="form-select" id="consignmentProduct" name="product_id" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="consignmentCostPrice" class="form-label">Cost Price (per item)</label>
+                        <input type="number" step="0.01" class="form-control" id="consignmentCostPrice" name="cost_price" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="consignmentQuantity" class="form-label">Quantity Consigned</label>
+                        <input type="number" class="form-control" id="consignmentQuantity" name="quantity_consigned" required min="1">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Add Consignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Consignment Modal -->
+<div class="modal fade" id="editConsignmentModal" tabindex="-1" aria-labelledby="editConsignmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editConsignmentModalLabel">Edit Consignment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editConsignmentForm">
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="editConsignmentId">
+                    <div class="mb-3">
+                        <label class="form-label">Product</label>
+                        <p id="editConsignmentProduct" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Supplier</label>
+                        <p id="editConsignmentSupplier" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editConsignmentCostPrice" class="form-label">Cost Price (per item)</label>
+                        <input type="number" step="0.01" class="form-control" id="editConsignmentCostPrice" name="cost_price" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editConsignmentQuantity" class="form-label">Quantity Consigned</label>
+                        <input type="number" class="form-control" id="editConsignmentQuantity" name="quantity_consigned" required min="1">
+                        <div class="form-text">Note: Changing this will adjust the main product stock.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="registerModal" tabindex="-1">
@@ -500,6 +632,28 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
         const year = now.getFullYear();
         const week = Math.ceil((((now - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
         if(weekInput) weekInput.value = `${year}-W${String(week).padStart(2, '0')}`;
+    });
+
+    // Function to handle panel switching
+    function handleMenuClick(e) {
+        const targetId = e.currentTarget.id.replace('menu-', '');
+        document.querySelectorAll('.sidebar .list-group-item').forEach(btn => btn.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        document.querySelectorAll('.main-content > div[id^="panel-"]').forEach(panel => panel.classList.add('d-none'));
+        const activePanel = document.getElementById(`panel-${targetId}`);
+        if (activePanel) {
+          activePanel.classList.remove('d-none');          // If the consignment panel is now active, load its data.
+          // This assumes you have a `loadConsignments` function in script.js
+          if (targetId === 'consignment' && typeof loadConsignments === 'function') {
+            loadConsignments();
+          }
+        }
+    }
+
+    // Attach event listeners to all sidebar menu buttons
+    document.querySelectorAll('.sidebar .list-group-item').forEach(button => {
+        button.removeEventListener('click', handleMenuClick); // Prevent duplicate listeners
+        button.addEventListener('click', handleMenuClick);
     });
 </script>
 </body>

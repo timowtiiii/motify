@@ -71,3 +71,18 @@ CREATE TABLE IF NOT EXISTS suppliers (
   products TEXT DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS consignments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT NOT NULL,
+  supplier_id INT NOT NULL,
+  branch_id INT DEFAULT NULL,
+  cost_price DECIMAL(10,2) NOT NULL,
+  quantity_consigned INT NOT NULL,
+  quantity_sold INT NOT NULL DEFAULT 0,
+  status ENUM('active','paid') NOT NULL DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
