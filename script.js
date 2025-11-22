@@ -172,102 +172,121 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(arr.length===0){ container.innerHTML = '<div class="text-muted">No products found</div>'; return; }
 
       const getStock = (stocks, size) => {
-        const stock = stocks.find(s => s.size.toLowerCase() === size.toLowerCase());
-        return stock ? stock.quantity : 0;
+          const stock = stocks.find(s => s.size.toLowerCase() === size.toLowerCase());
+          return stock ? stock.quantity : 0;
       };
 
-     container.innerHTML = arr.map(p=>`
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-          <div class="card h-100">
-            <img src="${escapeHtml(p.photo || 'uploads/no-image.png')}" class="card-img-top" style="height:100px;object-fit:cover" alt="${escapeHtml(p.name)}">
-            <div class="card-body p-1">
-              <div class="fw-semibold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
-              <div class="small text-muted" style="font-size:0.8em;">${escapeHtml(p.category||'')}</div>
-              <div class="fw-semibold mt-1">₱${formatCurrency((p.price||0) * 1.12)}</div>
-              <div class="mt-2 stock-container" data-product-id="${p.id}" data-stock-display-type="${p.stock_display_type || 'regular'}">
-                <div class="size-boxes d-none">
-                  <div class="size-box" data-size="s">S<br><small>${getStock(p.stocks, 's')} left</small></div>
-                  <div class="size-box" data-size="m">M<br><small>${getStock(p.stocks, 'm')} left</small></div>
-                  <div class="size-box" data-size="l">L<br><small>${getStock(p.stocks, 'l')} left</small></div>
-                  <div class="size-box" data-size="xl">XL<br><small>${getStock(p.stocks, 'xl')} left</small></div>
-                </div>
-                <div class="input-group input-group-sm mt-2">
-                  <div class="regular-stock-display d-none input-group-text bg-light border-end-0">
-                    <small>Stock: ${getStock(p.stocks, 'os')}</small>
+      container.innerHTML = arr.map(p => {
+        const totalStock = p.stocks.reduce((sum, s) => sum + s.quantity, 0);
+        return `
+          <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
+            <div class="card h-100 pos-product-card-container">
+              <div class="pos-product-header" data-product-id="${p.id}" style="cursor: pointer;">
+                <img src="${escapeHtml(p.photo || 'uploads/no-image.png')}" class="card-img-top" style="height:100px;object-fit:cover" alt="${escapeHtml(p.name)}">
+                <div class="card-body p-2">
+                  <div class="fw-bold" style="font-size:0.9em;">${escapeHtml(p.name)}</div>
+                  <div class="small text-muted">${escapeHtml(p.category || '')}</div>
+                  <div class="fw-semibold mt-1">₱${formatCurrency((p.price || 0) * 1.12)}</div>
+                  <div class="badge ${totalStock > 0 ? 'bg-success-light' : 'bg-danger-light'} text-dark mt-1">
+                    ${totalStock} Items Available
                   </div>
-                  <input type="number" min="1" value="1" class="form-control qty-input">
-                  <button class="btn btn-primary btn-sm add-to-cart-btn" ${p.stock_display_type === 'regular' && getStock(p.stocks, 'os') <= 0 ? 'disabled' : ''}>Add</button> 
                 </div>
+              </div>
+              <div class="pos-product-details p-2 d-none">
+                <!-- This content will be generated on click -->
               </div>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
-      container.querySelectorAll('.stock-container').forEach(sc => {
-        const stockDisplayType = sc.dataset.stockDisplayType;
-        if (stockDisplayType === 'regular') {
-            sc.querySelector('.size-boxes')?.classList.add('d-none');
-            sc.querySelector('.regular-stock-display')?.classList.remove('d-none'); // Show stock count
-        } else if (stockDisplayType === 'sizes') { // Ensure size boxes are visible and regular stock is hidden for size-based products
-            sc.querySelector('.size-boxes')?.classList.remove('d-none');
-            sc.querySelector('.regular-stock-display')?.classList.add('d-none');
-        }
-      });
+      // Attach click listener to new product card headers
+      container.querySelectorAll('.pos-product-header').forEach(header => {
+        header.addEventListener('click', () => {
+          const productId = header.dataset.productId;
+          const product = res.products.find(p => p.id == productId);
+          if (!product) return;
 
-      container.querySelectorAll('.size-box').forEach(box => {
-        box.addEventListener('click', () => {
-         const productId = box.closest('.stock-container').dataset.productId;
-          // Deselect other boxes for the same product
-          container.querySelectorAll(`.stock-container[data-product-id="${productId}"] .size-box`).forEach(b => b.classList.remove('selected'));
-          // Select the clicked box
-          box.classList.add('selected');
+          const detailsContainer = header.nextElementSibling;
 
-          // Enable/disable add button based on selected size's stock
-          const addButton = box.closest('.stock-container').querySelector('.add-to-cart-btn');
-          const stockText = box.querySelector('small')?.textContent || '0 left';
-          addButton.disabled = parseInt(stockText, 10) <= 0;
+          // Collapse any other open details sections
+          document.querySelectorAll('.pos-product-details').forEach(d => {
+            if (d !== detailsContainer) {
+              d.classList.add('d-none');
+              d.innerHTML = ''; // Clear content to save memory
+            }
+          });
+
+          // Toggle the current one
+          detailsContainer.classList.toggle('d-none');
+
+          // If we are opening it, populate the content
+          if (!detailsContainer.classList.contains('d-none')) {
+            let stockHtml = '';
+            if (product.stock_display_type === 'regular') {
+              stockHtml = `<div class="regular-stock-display input-group-text bg-light border-end-0 mb-2"><small>Stock: ${getStock(product.stocks, 'os')}</small></div>`;
+            } else { // sizes
+              stockHtml = `<div class="size-boxes d-flex justify-content-center gap-2 mb-3">
+                  <div class="size-box" data-size="s">S<br><small>${getStock(product.stocks, 's')} left</small></div>
+                  <div class="size-box" data-size="m">M<br><small>${getStock(product.stocks, 'm')} left</small></div>
+                  <div class="size-box" data-size="l">L<br><small>${getStock(product.stocks, 'l')} left</small></div>
+                  <div class="size-box" data-size="xl">XL<br><small>${getStock(product.stocks, 'xl')} left</small></div>
+                </div>`;
+            }
+            stockHtml += `<div class="input-group input-group-sm mt-2">
+                <input type="number" min="1" value="1" class="form-control qty-input">
+                <button class="btn btn-primary btn-sm add-to-cart-btn">Add</button>
+              </div>`;
+            detailsContainer.innerHTML = stockHtml;
+
+            // Add event listeners for size selection
+            detailsContainer.querySelectorAll('.size-box').forEach(box => {
+              box.addEventListener('click', (e) => {
+                e.stopPropagation();
+                detailsContainer.querySelectorAll('.size-box').forEach(b => b.classList.remove('selected'));
+                box.classList.add('selected');
+                const addButton = detailsContainer.querySelector('.add-to-cart-btn');
+                const stockText = box.querySelector('small')?.textContent || '0 left';
+                addButton.disabled = parseInt(stockText, 10) <= 0;
+              });
+            });
+
+            // Add event listener for the "Add to Cart" button
+            detailsContainer.querySelector('.add-to-cart-btn').addEventListener('click', (e) => {
+              e.stopPropagation();
+              const qty = parseInt(detailsContainer.querySelector('.qty-input').value || '1', 10);
+              if (product.stock_display_type === 'regular') {
+                addToCart(product.id, 'os', qty, res.products);
+              } else {
+                const selectedSizeBox = detailsContainer.querySelector('.size-box.selected');
+                if (!selectedSizeBox) { alert('Please select a size.'); return; }
+                const size = selectedSizeBox.dataset.size;
+                addToCart(product.id, size, qty, res.products);
+              }
+            });
+          }
         });
       });
 
-      container.querySelectorAll('.add-to-cart-btn').forEach(b => b.addEventListener('click', () => {
-        const stockContainer = b.closest('.stock-container');
-        const id = stockContainer.dataset.productId;
-        const stockDisplayType = stockContainer.dataset.stockDisplayType; // Use the new attribute
-        const qty = parseInt(stockContainer.querySelector('.qty-input').value || '1', 10); 
-        
-        // Find the full product object to get stock details
-        const product = res.products.find(p => p.id == id);
+      // Simplified addToCart with stock checking
+      window.addToCart = (id, size, qty, productList) => {
+        const product = productList.find(p => p.id == id);
         if (!product) return;
 
-        if (stockDisplayType === 'regular') {
-            const stockAvailable = (product.stocks.find(s => s.size === 'os') || {}).quantity || 0;
-            const itemInCart = CART.find(item => item.id == id && item.size === 'os');
-            const qtyInCart = itemInCart ? itemInCart.qty : 0;
+        const stockAvailable = (product.stocks.find(s => s.size === size) || {}).quantity || 0;
+        const itemInCart = CART.find(item => item.id == id && item.size === size);
+        const qtyInCart = itemInCart ? itemInCart.qty : 0;
 
-            if (qty + qtyInCart > stockAvailable) {
-                alert(`Cannot add. Stock for this item is only ${stockAvailable}. You already have ${qtyInCart} in cart.`);
-                return;
-            }
-            addToCart(id, 'os', qty);
-        } else {
-            const selectedSizeBox = stockContainer.querySelector('.size-box.selected');
-            if (!selectedSizeBox) {
-              alert('Please select a size.'); return;
-            }
-            const size = selectedSizeBox.dataset.size;
-            const stockAvailable = (product.stocks.find(s => s.size === size) || {}).quantity || 0;
-            const itemInCart = CART.find(item => item.id == id && item.size === size);
-            const qtyInCart = itemInCart ? itemInCart.qty : 0;
-
-            if (qty + qtyInCart > stockAvailable) {
-                alert(`Cannot add. Stock for size ${size.toUpperCase()} is only ${stockAvailable}. You already have ${qtyInCart} in cart.`);
-                return;
-            }
-
-            addToCart(id, size, qty);
+        if (qty + qtyInCart > stockAvailable) {
+            alert(`Cannot add. Stock for this item is only ${stockAvailable}. You already have ${qtyInCart} in cart.`);
+            return;
         }
-      })); // End of .add-to-cart-btn listener attachment
+
+        const existingItem = CART.find(x => x.id == id && x.size == size);
+        if (existingItem) { existingItem.qty += qty; } 
+        else { CART.push({ id: parseInt(id, 10), size, qty }); }
+        updateCartUI();
+      };
     }); // End of api().then()
   }
 
@@ -771,11 +790,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         document.getElementById('editUserId').value = user.id;
         document.getElementById('editUserName').value = user.username;
         document.getElementById('editUserEmail').value = user.email || '';
-        document.getElementById('editUserRole').value = user.role;
-        document.getElementById('editUserRole').dispatchEvent(new Event('change')); // Trigger change to show/hide email field
         setTimeout(()=>{ 
+            const roleSelect = document.getElementById('editUserRole');
+            if(roleSelect) roleSelect.value = user.role;
             const sel=document.getElementById('editUserBranchSelect'); 
             if(sel) sel.value = user.assigned_branch_id||''; 
+            roleSelect.dispatchEvent(new Event('change')); // Trigger change to show/hide email field
         },100);
         new bootstrap.Modal(document.getElementById('editUserModal')).show();
       }));
