@@ -179,7 +179,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <h4 class="text-primary">Logs</h4>
           <div class="d-flex align-items-center">
             <div id="logButtons" class="btn-group">
-              <button id="downloadExcel" class="btn btn-outline-success btn-sm" style="display: none;">Download Excel</button>
+              <button id="downloadPdf" class="btn btn-outline-success btn-sm" style="display: none;">Download PDF</button>
               <button id="showActionLogs" class="btn btn-outline-secondary btn-sm">Action Logs</button>
               <button id="showSalesLogs" class="btn btn-outline-secondary btn-sm active">Sales Logs</button>
             </div>
@@ -187,21 +187,6 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
               <!-- This container will be populated by script.js -->
             </div>
           </div>
-        </div>
-        <div class="card p-3 mb-3">
-            <h5 class="card-title">Weekly Sales Report</h5>
-            <p class="card-text small text-muted">Select a week to download the sales report in Excel format.</p>
-            <form action="download_weekly_report.php" method="GET" class="mt-2">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-4">
-                        <label for="week-selector" class="form-label">Select Week</label>
-                        <input type="week" id="week-selector" name="week" class="form-control form-control-sm" required>
-                    </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-success btn-sm">Download Weekly Report</button>
-                    </div>
-                </div>
-            </form>
         </div>
         <div class="card p-3">
           <div id="logsContent" class="table-responsive"></div>
@@ -681,6 +666,9 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 <script>const USER_ROLE = <?= json_encode($role) ?>; const ASSIGNED_BRANCH = <?= json_encode($assigned_branch) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="script.js"></script>
 <script>
     // Set the default value of the week input to the current week

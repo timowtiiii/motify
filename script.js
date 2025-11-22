@@ -841,8 +841,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Logs - UPDATED: clearer display
   function loadActionLogs(){ 
-    const downloadBtn = document.getElementById('downloadExcel');
-    if (downloadBtn) downloadBtn.style.display = 'none';
     const el = document.getElementById('logsContent'); 
     const timeRange = document.getElementById('logsTimeRange')?.value || '';
     if(!el) return; 
@@ -862,7 +860,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
 
   function loadSalesLogs(timeRange = ''){
-    const downloadBtn = document.getElementById('downloadExcel');
+    const downloadBtn = document.getElementById('downloadPdf');
     if (downloadBtn) downloadBtn.style.display = 'block';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
@@ -887,16 +885,63 @@ const rows = res.sales.map(s=>`<tr>
   // Event listeners for time range buttons
   document.getElementById('showActionLogs')?.addEventListener('click', loadActionLogs);
   document.getElementById('showSalesLogs')?.addEventListener('click', loadSalesLogs);
+  
+document.getElementById('downloadPdf')?.addEventListener('click', () => {
+    const logType = document.querySelector('#logButtons .btn.active').id === 'showSalesLogs' ? 'sales' : 'action';
+    const timeRangeType = document.getElementById('logsTimeRangeType')?.value || 'monthly';
+    const selectedValue = document.getElementById('logsTimeRangeValue')?.value || '';
 
-  document.getElementById('downloadExcel')?.addEventListener('click', ()=>{
-    api('export_sales_logs').then(res=>{
-      if(res.ok){
-        const a = document.createElement('a');
-        a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(res.csv);
-        a.download = 'sales_logs.csv';
-        a.click();
+    const params = { type: logType };
+    if (logType === 'sales') {
+        params.time_range_type = timeRangeType;
+        params.time_range_value = selectedValue;
+    }
+
+    api('get_logs', { params: params }).then(res => {
+      if (res.ok) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const title = logType === 'sales' ? 'Sales Log' : 'Action Log';
+        const headers = logType === 'sales' 
+            ? [['ID', 'Receipt No', 'Products', 'Total', 'Payment', 'User', 'Branch', 'Time']]
+            : [['ID', 'Action', 'User', 'Branch', 'Time', 'Meta']];
+        
+        const body = logType === 'sales'
+            ? res.sales.map(s => [
+                s.id,
+                s.receipt_no,
+                s.products,
+                `P ${formatCurrency(s.total || 0)}`,
+                s.payment_mode,
+                s.username || 'N/A',
+                s.branch_name || 'N/A',
+                s.created_at
+              ])
+            : res.actions.map(l => [
+                l.id,
+                l.action,
+                l.username || 'N/A',
+                l.branch_name || 'N/A',
+                l.created_at,
+                l.meta || ''
+              ]);
+
+        doc.setFontSize(18);
+        doc.text(title, 14, 22);
+        doc.autoTable({
+            head: headers,
+            body: body,
+            startY: 30,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [22, 160, 133] },
+        });
+
+        const filename = `${logType}_log_${new Date().toISOString().slice(0,10)}.pdf`;
+        doc.save(filename);
       } else {
-        alert(res.error || 'Could not export sales logs.');
+        alert(res.error || `Could not generate ${logType} PDF.`);
       }
     });
   });
@@ -1132,19 +1177,6 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
     };
 
     typeSelect.addEventListener('change', updateValueInput);
-  }
-
-  function loadSalesLogs(timeRangeType = '', selectedValue = '') {
-    const downloadBtn = document.getElementById('downloadExcel');
-    if (downloadBtn) downloadBtn.style.display = 'block';
-    const el = document.getElementById('logsContent');
-    if (!el) return;
-    el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
-    api('get_logs', { params: { type: 'sales', time_range_type: timeRangeType, time_range_value: selectedValue } }).then(res => {
-      if (!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load sales logs: ${escapeHtml(res.error || 'Unknown error')}</div>`; return; }
-      const rows = res.sales.map(s => `<tr> <td>${s.id}</td> <td>${escapeHtml(s.receipt_no)}</td> <td>${escapeHtml(s.products)}</td> <td>₱${formatCurrency(s.total || 0)}</td> <td>${escapeHtml(s.payment_mode)}</td> <td>${escapeHtml(s.username || 'N/A')}</td> <td>${escapeHtml(s.branch_name || 'N/A')}</td> <td>${escapeHtml(s.created_at)}</td> </tr>`).join('');
-      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Receipt No</th><th>Products</th><th>Total</th><th>Payment</th><th>User</th><th>Branch</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`;
-    });
   }
 
   // Initialize the new log filter UI

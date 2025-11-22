@@ -656,28 +656,6 @@ case 'get_stats':
 
     // --------------------------------------------------------------------------------------------------------------------
 
-case 'export_sales_logs':
-  if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
-  $res = $mysqli->query("SELECT s.*, u.username, b.name AS branch_name FROM receipts s LEFT JOIN users u ON s.created_by=u.id LEFT JOIN branches b ON s.branch_id=b.id ORDER BY s.id DESC");
-  $csv = "\"Receipt ID\",\"Products\",\"Total\",\"Payment Method\",\"User\",\"Branch\",\"Time\"\r\n";
-  while($r=$res->fetch_assoc()) {
-    $items = json_decode($r['items'], true);
-    $product_names = [];
-    if (is_array($items)) {
-      $i = 1;
-      foreach ($items as $item) {
-        $product_names[] = $i . '. ' . $item['name'];
-        $i++;
-      }
-    }
-    $r['products'] = implode("\r\n", $product_names);
-    $csv .= '"' . $r['receipt_no'] . '","' . $r['products'] . '","' . $r['total'] . '","' . $r['payment_mode'] . '","' . $r['username'] . '","' . $r['branch_name'] . '","' . $r['created_at'] . "'\r\n";
-  }
-  jsonRes(['ok'=>true, 'csv'=>$csv]);
-  break;
-
-    // --------------------------------------------------------------------------------------------------------------------
-
     case 'checkout':
   if ($method !== 'POST') jsonRes(['ok' => false, 'error' => 'POST required']);
 
