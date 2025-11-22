@@ -6,6 +6,17 @@ session_start();
 date_default_timezone_set('Asia/Manila');
 
 function jsonRes($d){ echo json_encode($d, JSON_UNESCAPED_UNICODE); exit; }
+function log_action($mysqli, $action, $meta = '', $user_id = null, $branch_id = null) {
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+    }
+    
+    if ($user_id) {
+        $stmt = $mysqli->prepare("INSERT INTO action_logs (user_id, action, meta, branch_id) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param('issi', $user_id, $action, $meta, $branch_id);
+        $stmt->execute();
+    }
+}
 function is_owner(){ return (isset($_SESSION['role']) && $_SESSION['role']==='owner'); }
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_REQUEST['action'] ?? '';
@@ -28,7 +39,11 @@ try {
       if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
       $stmt = $mysqli->prepare("INSERT INTO branches (name, created_at) VALUES (?, NOW())");
       $stmt->bind_param('s',$name);
-      if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
+      if($stmt->execute()) {
+        $new_id = $stmt->insert_id;
+        log_action($mysqli, 'add_branch', 'id:'.$new_id.', name:'.$name);
+        jsonRes(['ok'=>true,'id'=>$new_id]);
+      }
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
@@ -40,7 +55,10 @@ try {
       if(!$id || $name==='') jsonRes(['ok'=>false,'error'=>'invalid']);
       $stmt = $mysqli->prepare("UPDATE branches SET name=? WHERE id=?");
       $stmt->bind_param('si',$name,$id);
-      jsonRes(['ok'=>$stmt->execute()]);
+      if ($stmt->execute()) {
+        log_action($mysqli, 'edit_branch', 'id:'.$id.', name:'.$name);
+        jsonRes(['ok'=>true]);
+      } else jsonRes(['ok'=>false]);
       break;
 
     case 'delete_branch':
@@ -50,7 +68,10 @@ try {
       if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
       $stmt = $mysqli->prepare("DELETE FROM branches WHERE id=?");
       $stmt->bind_param('i',$id);
-      jsonRes(['ok'=>$stmt->execute()]);
+      if ($stmt->execute()) {
+        log_action($mysqli, 'delete_branch', 'id:'.$id);
+        jsonRes(['ok'=>true]);
+      } else jsonRes(['ok'=>false]);
       break;
 
     // --------------------------------------------------------------------------------------------------------------------
@@ -74,7 +95,11 @@ try {
       $products = trim($_POST['products'] ?? '');
       $stmt = $mysqli->prepare("INSERT INTO suppliers (name, email, phone, location, brands, products, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
       $stmt->bind_param('ssssss',$name, $email, $phone, $location, $brands, $products);
-      if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
+      if($stmt->execute()) {
+        $new_id = $stmt->insert_id;
+        log_action($mysqli, 'add_supplier', 'id:'.$new_id.', name:'.$name);
+        jsonRes(['ok'=>true,'id'=>$new_id]);
+      }
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
@@ -85,7 +110,10 @@ try {
       if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
       $stmt = $mysqli->prepare("DELETE FROM suppliers WHERE id=?");
       $stmt->bind_param('i',$id);
-      jsonRes(['ok'=>$stmt->execute()]);
+      if ($stmt->execute()) {
+        log_action($mysqli, 'delete_supplier', 'id:'.$id);
+        jsonRes(['ok'=>true]);
+      } else jsonRes(['ok'=>false]);
       break;
 
     case 'edit_supplier':
@@ -102,7 +130,10 @@ try {
       $products = trim($_POST['products'] ?? '');
       $stmt = $mysqli->prepare("UPDATE suppliers SET name=?, email=?, phone=?, location=?, brands=?, products=? WHERE id=?");
       $stmt->bind_param('ssssssi', $name, $email, $phone, $location, $brands, $products, $id);
-      if($stmt->execute()) jsonRes(['ok'=>true]);
+      if($stmt->execute()) {
+        log_action($mysqli, 'edit_supplier', 'id:'.$id);
+        jsonRes(['ok'=>true]);
+      }
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
@@ -167,13 +198,18 @@ try {
         // Insert into consignments table
         $stmt = $mysqli->prepare("INSERT INTO consignments (product_id, supplier_id, branch_id, cost_price, quantity_consigned) VALUES (?, ?, ?, ?, ?)");
         $stmt->bind_param('iiidi', $product_id, $supplier_id, $branch_id, $cost_price, $quantity);
-        if (!$stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to create consignment record.']); }
+        if (!$stmt->execute()) { 
+            $mysqli->rollback(); 
+            jsonRes(['ok' => false, 'error' => 'Failed to create consignment record.']); 
+        }
+        $new_id = $stmt->insert_id;
 
         // Update product stock
         $stock_stmt = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity + ? WHERE product_id = ?");
         $stock_stmt->bind_param('ii', $quantity, $product_id);
         if (!$stock_stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to update product stock.']); }
 
+        log_action($mysqli, 'add_consignment', 'id:'.$new_id.', product_id:'.$product_id.', qty:'.$quantity, null, $branch_id);
         $mysqli->commit();
         jsonRes(['ok' => true]);
         break;
@@ -184,7 +220,11 @@ try {
         if (!$id) jsonRes(['ok' => false, 'error' => 'Invalid ID.']);
         $stmt = $mysqli->prepare("UPDATE consignments SET status = 'paid' WHERE id = ?");
         $stmt->bind_param('i', $id);
-        jsonRes(['ok' => $stmt->execute()]);
+        if ($stmt->execute()) {
+            log_action($mysqli, 'mark_consignment_paid', 'id:'.$id);
+            jsonRes(['ok' => true]);
+        }
+        jsonRes(['ok' => false]);
         break;
 
     case 'edit_consignment':
@@ -220,6 +260,7 @@ try {
         $stock_stmt->bind_param('ii', $quantity_diff, $product_id);
         if (!$stock_stmt->execute()) { $mysqli->rollback(); jsonRes(['ok' => false, 'error' => 'Failed to update product stock.']); }
 
+        log_action($mysqli, 'edit_consignment', 'id:'.$id.', qty_diff:'.$quantity_diff);
         $mysqli->commit();
         jsonRes(['ok' => true]);
         break;
@@ -406,6 +447,7 @@ try {
             }
         }
         // Always return success if product and stock insertion was attempted
+        log_action($mysqli, 'add_product', 'id:'.$product_id.', name:'.$name, null, $branch_id);
         jsonRes(['ok'=>true,'id'=>$product_id]);
       }
       else { // Only return error if the initial product insertion failed
@@ -426,6 +468,29 @@ try {
       $price = floatval($_POST['price']);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       // handle photo
+
+      // --- START: Fetch old data for detailed logging ---
+      $old_product_stmt = $mysqli->prepare("SELECT * FROM products WHERE id = ?");
+      $old_product_stmt->bind_param('i', $id);
+      $old_product_stmt->execute();
+      $old_product = $old_product_stmt->get_result()->fetch_assoc();
+
+      $old_stocks_stmt = $mysqli->prepare("SELECT size, quantity FROM product_stocks WHERE product_id = ?");
+      $old_stocks_stmt->bind_param('i', $id);
+      $old_stocks_stmt->execute();
+      $old_stocks_res = $old_stocks_stmt->get_result();
+      $old_stocks = [];
+      while ($row = $old_stocks_res->fetch_assoc()) {
+          $old_stocks[$row['size']] = (int)$row['quantity'];
+      }
+      // --- END: Fetch old data ---
+
+      // Begin transaction to ensure atomicity
+      $mysqli->begin_transaction();
+
+      try {
+
+
       $photo_path = null;
       if(!empty($_FILES['photo']['name'])){
         if(!is_dir('uploads')) @mkdir('uploads',0755,true);
@@ -487,11 +552,50 @@ try {
             }
         }
         // Always return success if product and stock update was attempted
+        // --- START: Detailed Logging ---
+        $meta_details = [];
+        if ($old_product) {
+            if ($old_product['name'] !== $name) $meta_details[] = "name changed to '{$name}'";
+            if ($old_product['sku'] !== $sku) $meta_details[] = "SKU changed to '{$sku}'";
+            if ($old_product['category'] !== $category) $meta_details[] = "category changed to '{$category}'";
+            if ((float)$old_product['price'] !== $price) $meta_details[] = "price changed to {$price}";
+            if ((int)$old_product['branch_id'] !== $branch_id) $meta_details[] = "branch changed";
+        }
+
+        $new_stocks = [];
+        if ($save_regular_stock && isset($_POST['stock_regular'])) {
+            $new_stocks['os'] = intval($_POST['stock_regular']);
+        }
+        if ($save_size_stock) {
+            foreach (['s', 'm', 'l', 'xl'] as $size) {
+                if (isset($_POST['stock_' . $size])) {
+                    $new_stocks[$size] = intval($_POST['stock_' . $size]);
+                }
+            }
+        }
+
+        foreach ($new_stocks as $size => $new_qty) {
+            $old_qty = $old_stocks[$size] ?? 0;
+            $diff = $new_qty - $old_qty;
+            if ($diff !== 0) {
+                $sign = $diff > 0 ? '+' : '';
+                $size_label = ($size === 'os') ? 'qty' : "size {$size}";
+                $meta_details[] = "{$size_label}: {$sign}{$diff}";
+            }
+        }
+
+        $meta_string = !empty($meta_details) ? implode(', ', $meta_details) : 'updated';
+        log_action($mysqli, 'edit_product', "id:{$id}, {$meta_string}", null, $branch_id);
+        // --- END: Detailed Logging ---
+
+        $mysqli->commit();
         jsonRes(['ok'=>true]);
       }
       else { // Only return error if the initial product update failed
+        $mysqli->rollback();
         jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       }
+    } catch (Exception $e) { $mysqli->rollback(); jsonRes(['ok'=>false,'error'=>$e->getMessage()]); }
       break;
 
     // --------------------------------------------------------------------------------------------------------------------
@@ -503,7 +607,11 @@ try {
       if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
       $stmt = $mysqli->prepare("DELETE FROM products WHERE id=?");
       $stmt->bind_param('i',$id);
-      jsonRes(['ok'=>$stmt->execute()]);
+      if ($stmt->execute()) {
+        log_action($mysqli, 'delete_product', 'id:'.$id);
+        jsonRes(['ok'=>true]);
+      }
+      jsonRes(['ok'=>false]);
       break;
 
     // --------------------------------------------------------------------------------------------------------------------
@@ -535,7 +643,11 @@ try {
       $sql = "INSERT INTO users (username,password,email,role,assigned_branch_id,created_at) VALUES (?,?,?,?,?,NOW())";
       $stmt = $mysqli->prepare($sql);
       $stmt->bind_param('ssssi', $username,$hash,$email,$role,$branch_id);
-      if($stmt->execute()) jsonRes(['ok'=>true,'id'=>$stmt->insert_id]);
+      if($stmt->execute()) {
+        $new_id = $stmt->insert_id;
+        log_action($mysqli, 'add_user', 'id:'.$new_id.', username:'.$username);
+        jsonRes(['ok'=>true,'id'=>$new_id]);
+      }
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
@@ -571,6 +683,7 @@ try {
       }
 
       if ($user_updated) {
+        log_action($mysqli, 'edit_user', 'id:'.$id.', username:'.$username);
         $mysqli->commit();
         jsonRes(['ok' => true]);
       } else {
@@ -586,7 +699,11 @@ try {
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $id = intval($_POST['id'] ?? 0); if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
       $stmt = $mysqli->prepare("DELETE FROM users WHERE id=?"); $stmt->bind_param('i',$id);
-      jsonRes(['ok'=>$stmt->execute()]);
+      if ($stmt->execute()) {
+        log_action($mysqli, 'delete_user', 'id:'.$id);
+        jsonRes(['ok'=>true]);
+      }
+      jsonRes(['ok'=>false]);
       break;
 
     // --------------------------------------------------------------------------------------------------------------------
@@ -620,17 +737,35 @@ try {
         $res = $mysqli->query($sql);
         $out = [];
         while ($r = $res->fetch_assoc()) {
-            $items = json_decode($r['items'], true);
-            $product_names = [];
-            if (is_array($items)) {
-                foreach ($items as $item) { $product_names[] = $item['name']; }
-            }
-            $r['products'] = implode(', ', $product_names);
+            // Calculate VAT details for each receipt on the fly
+            $total = floatval($r['total']);
+            $vat_rate = 0.12;
+            $r['vatable_sales'] = $total / (1 + $vat_rate);
+            $r['vat_amount'] = $total - $r['vatable_sales'];
+            
             $out[] = $r;
         }
         jsonRes(['ok'=>true,'sales'=>$out]);
       } else {
-        $res = $mysqli->query("SELECT l.*, u.username, b.name AS branch_name FROM action_logs l LEFT JOIN users u ON l.user_id=u.id LEFT JOIN branches b ON l.branch_id=b.id ORDER BY l.id DESC LIMIT 500");
+        $sql = "SELECT l.*, u.username, b.name AS branch_name FROM action_logs l LEFT JOIN users u ON l.user_id=u.id LEFT JOIN branches b ON l.branch_id=b.id WHERE 1=1";
+
+        if ($time_range_type === 'weekly' && preg_match('/^\d{4}-W\d{2}$/', $time_range_value)) {
+          $year = (int)substr($time_range_value, 0, 4);
+          $week = (int)substr($time_range_value, 6, 2);
+          $date = new DateTime();
+          $date->setISODate($year, $week);
+          $start_date = $date->format('Y-m-d');
+          $date->modify('+6 days');
+          $end_date = $date->format('Y-m-d');
+          $sql .= " AND l.created_at BETWEEN '$start_date 00:00:00' AND '$end_date 23:59:59'";
+        } elseif ($time_range_type === 'monthly' && preg_match('/^\d{4}-\d{2}$/', $time_range_value)) {
+          $sql .= " AND DATE_FORMAT(l.created_at, '%Y-%m') = '$time_range_value'";
+        } elseif ($time_range_type === 'yearly' && preg_match('/^\d{4}$/', $time_range_value)) {
+          $sql .= " AND YEAR(l.created_at) = '$time_range_value'";
+        }
+
+        $sql .= " ORDER BY l.id DESC LIMIT 500";
+        $res = $mysqli->query($sql);
         $out=[]; while($r=$res->fetch_assoc()) $out[]=$r;
         jsonRes(['ok'=>true,'actions'=>$out]);
       }
@@ -706,7 +841,8 @@ case 'get_stats':
       'name' => $row['name'],
       'qty' => $qty,
       'size' => $size,
-      'price' => floatval($row['price']) * 1.12 // Return VAT-inclusive price
+      'base_price' => floatval($row['price']), // Store the pre-VAT price
+      'price' => floatval($row['price']) * 1.12 // Store the final VAT-inclusive price
     ];
 
     $stmt2 = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity - ? WHERE product_id=? AND size = ? AND quantity >= ?");

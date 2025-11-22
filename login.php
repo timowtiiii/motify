@@ -16,6 +16,13 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $_SESSION['username'] = $row['username'];
         $_SESSION['role'] = $row['role'];
         $_SESSION['assigned_branch_id'] = $row['assigned_branch_id'];
+
+        // Log the successful login action
+        $log_stmt = $mysqli->prepare("INSERT INTO action_logs (user_id, action, meta) VALUES (?, 'login', ?)");
+        $meta_message = 'User logged in';
+        $log_stmt->bind_param('is', $row['id'], $meta_message);
+        $log_stmt->execute();
+
         header('Location: index.php'); exit;
       } else $error = 'Invalid credentials';
     } else $error = 'Invalid credentials';

@@ -862,10 +862,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // Logs - UPDATED: clearer display
   function loadActionLogs(){ 
     const el = document.getElementById('logsContent'); 
-    const timeRange = document.getElementById('logsTimeRange')?.value || '';
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading action logs...</div>';
-    api('get_logs',{ params:{ type:'action' }}).then(res=>{
+
+    const timeRangeType = document.getElementById('logsTimeRangeType')?.value || 'monthly';
+    const timeRangeValue = document.getElementById('logsTimeRangeValue')?.value || '';
+    const params = { type: 'action', time_range_type: timeRangeType, time_range_value: timeRangeValue };
+
+    api('get_logs',{ params: params }).then(res=>{
       if(!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load action logs: ${escapeHtml(res.error||'Unknown error')}</div>`; return; }
       const rows = res.actions.map(l=>`<tr>
         <td>${l.id}</td>
@@ -879,26 +883,92 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }); 
   }
 
-  function loadSalesLogs(timeRange = ''){
+  function loadSalesLogs(){
     const downloadBtn = document.getElementById('downloadPdf');
     if (downloadBtn) downloadBtn.style.display = 'block';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading sales logs...</div>';
-    api('get_logs',{ params:{ type:'sales', time_range: timeRange }}).then(res=>{
+
+    const timeRangeType = document.getElementById('logsTimeRangeType')?.value || 'monthly';
+    const timeRangeValue = document.getElementById('logsTimeRangeValue')?.value || '';
+    const params = { type: 'sales', time_range_type: timeRangeType, time_range_value: timeRangeValue };
+    api('get_logs',{ params: params }).then(res=>{
 
       if(!res.ok) { el.innerHTML = `<div class="text-danger">Failed to load sales logs: ${escapeHtml(res.error||'Unknown error')}</div>`; return; }
-const rows = res.sales.map(s=>`<tr>
-        <td>${s.id}</td>
-        <td>${escapeHtml(s.receipt_no)}</td>
-        <td>${escapeHtml(s.products)}</td>
-        <td>₱${formatCurrency(s.total||0)}</td>
-        <td>${escapeHtml(s.payment_mode)}</td>
-        <td>${escapeHtml(s.username||'N/A')}</td>
-        <td>${escapeHtml(s.branch_name||'N/A')}</td>
-        <td>${escapeHtml(s.created_at)}</td>
-      </tr>`).join('');
-      el.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Receipt No</th><th>Products</th><th>Total</th><th>Payment</th><th>User</th><th>Branch</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`; 
+
+      const rows = res.sales.map((s, index) => {
+        let itemsHtml = 'No item data';
+        try {
+          const items = JSON.parse(s.items);
+          const formatLine = (name, qty, price, total) => {
+              let line = `<td>${escapeHtml(name)}</td>`;
+              line += `<td class="text-center">${qty}</td>`;
+              line += `<td class="text-end">₱${formatCurrency(price)}</td>`;
+              line += `<td class="text-end">₱${formatCurrency(total)}</td>`;
+              return `<tr>${line}</tr>`;
+          };
+          if (Array.isArray(items)) {
+            itemsHtml = items.map(item => 
+              // The 'price' column will show the pre-VAT price (base_price).
+              // The 'total' column will show the final VAT-inclusive total (price * qty).
+              formatLine(`${item.name} (${item.size.toUpperCase()})`, 
+                item.qty, 
+                item.base_price ?? (item.price / 1.12), // Fallback for old receipts without base_price
+                item.price * item.qty)
+            ).join('');
+          }
+        } catch (e) { console.error('Failed to parse items JSON for receipt ' + s.receipt_no, s.items); }
+
+        return `
+          <tr class="log-summary-row" data-bs-toggle="collapse" data-bs-target="#log-details-${s.id}" style="cursor:pointer;">
+            <td>${s.id}</td>
+            <td>${escapeHtml(s.receipt_no)}</td>
+            <td>₱${formatCurrency(s.total||0)}</td>
+            <td>${escapeHtml(s.payment_mode)}</td>
+            <td>${escapeHtml(s.username||'N/A')}</td>
+            <td>${escapeHtml(s.branch_name||'N/A')}</td>
+            <td>${escapeHtml(s.created_at)}</td>
+            <td><button class="btn btn-sm btn-outline-info">Details</button></td>
+          </tr>
+          <tr class="collapse" id="log-details-${s.id}">
+            <td colspan="8">
+              <div class="p-3 bg-light">
+                <div class="row">
+                  <div class="col-md-8">
+                    <h6>Items Sold:</h6>
+                    <table class="table table-sm">
+                      <thead><tr><th>Item</th><th class="text-center">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th></tr></thead>
+                      <tbody>${itemsHtml}</tbody>
+                    </table>
+                  </div>
+                  <div class="col-md-4">
+                    <h6>Summary:</h6>
+                    <ul class="list-group">
+                      <li class="list-group-item d-flex justify-content-between"><span>Vatable Sales:</span> <strong>₱${formatCurrency(s.vatable_sales || 0)}</strong></li>
+                      <li class="list-group-item d-flex justify-content-between"><span>VAT (12%):</span> <strong>₱${formatCurrency(s.vat_amount || 0)}</strong></li>
+                      <li class="list-group-item d-flex justify-content-between bg-dark text-white">
+                        <span class="fw-bold">TOTAL:</span> 
+                        <strong class="fw-bold">₱${formatCurrency(s.total || 0)}</strong>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      el.innerHTML = `
+        <table class="table table-hover">
+          <thead>
+            <tr><th>ID</th><th>Receipt No</th><th>Total</th><th>Payment</th><th>User</th><th>Branch</th><th>Time</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>`; 
     }); 
   }
 
@@ -911,11 +981,9 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
     const timeRangeType = document.getElementById('logsTimeRangeType')?.value || 'monthly';
     const selectedValue = document.getElementById('logsTimeRangeValue')?.value || '';
 
-    const params = { type: logType };
-    if (logType === 'sales') {
-        params.time_range_type = timeRangeType;
-        params.time_range_value = selectedValue;
-    }
+    const params = { type: logType, time_range_type: timeRangeType, time_range_value: selectedValue };
+
+
 
     api('get_logs', { params: params }).then(res => {
       if (res.ok) {
@@ -929,10 +997,19 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
         
         const body = logType === 'sales'
             ? res.sales.map(s => [
-                s.id,
-                s.receipt_no,
-                s.products,
-                `P ${formatCurrency(s.total || 0)}`,
+                s.id, // ID
+                s.receipt_no, // Receipt No
+                (() => { // Products
+                  try {
+                    const items = JSON.parse(s.items);
+                    if (Array.isArray(items)) {
+                      return items.map(item => `${item.qty}x ${item.name} (${item.size.toUpperCase()})`).join('\n');
+                    }
+                  } catch (e) { /* ignore parse error */ }
+                  return 'N/A';
+                })(),
+                `P ${formatCurrency(s.total || 0)}`, // Total
+                // The rest of the fields remain the same
                 s.payment_mode,
                 s.username || 'N/A',
                 s.branch_name || 'N/A',
@@ -997,7 +1074,7 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
             const p = productsById[it.id];
             if (!p) return;
 
-            const line = Number(p.price * 1.12) * it.qty;
+            const line = Number(p.price) * it.qty; // Use base price for calculation, VAT is handled on server
             total += line;
 
             elem.innerHTML += `
@@ -1192,8 +1269,13 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         newElement.id = 'logsTimeRangeValue';
         newElement.className = 'form-control';
         valueInput.replaceWith(newElement);
-        newElement.addEventListener('change', () => loadSalesLogs(type, newElement.value));
-        loadSalesLogs(type, newElement.value);
+        newElement.addEventListener('change', () => {
+            const currentLogType = document.querySelector('#logButtons .btn.active').id;
+            if (currentLogType === 'showSalesLogs') loadSalesLogs();
+            else loadActionLogs();
+        });
+        // Initial load for the default view (sales)
+        loadSalesLogs();
     };
 
     typeSelect.addEventListener('change', updateValueInput);
@@ -1208,7 +1290,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
   const timeRangeContainer = document.getElementById('logsTimeRangeContainer');
 
   actionLogBtn?.addEventListener('click', () => {
-    timeRangeContainer.classList.add('d-none');
+    timeRangeContainer.classList.remove('d-none');
     actionLogBtn.classList.add('active');
     salesLogBtn.classList.remove('active');
   });
