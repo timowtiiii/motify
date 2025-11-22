@@ -237,22 +237,31 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="addItemModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
-    <form id="addItemForm" class="modal-content" enctype="multipart/form-data" autocomplete="off">
+    <form id="addItemForm" class="modal-content" enctype="multipart/form-data" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Add Item</h5></div>
       <div class="modal-body row g-2">
         <div class="col-md-6">
-          <input class="form-control mb-2" name="item_name" placeholder="Item Name" required>
+          <div class="mb-2">
+            <input class="form-control" name="item_name" placeholder="Item Name" required>
+            <div class="invalid-feedback">Item name is required.</div>
+          </div>
           <input class="form-control mb-2" name="sku" placeholder="SKU (Stock Keeping Unit)(optional)">
-          <select class="form-select mb-2" name="category">
-            <option value="">Select Category</option>
-            <option value="helmet">Helmet</option>
-            <option value="jacket">Jacket</option>
-            <option value="topbox">Topbox</option>
-            <option value="bracket">Bracket</option>
-            <option value="others">Others</option>
+          <div class="mb-2">
+            <select class="form-select" name="category" required>
+              <option value="">Select Category</option>
+              <option value="helmet">Helmet</option>
+              <option value="jacket">Jacket</option>
+              <option value="topbox">Topbox</option>
+              <option value="bracket">Bracket</option>
+              <option value="others">Others</option>
+            </select>
+            <div class="invalid-feedback">Please select a category.</div>
+          </div>
+          <input type="number" step="0.01" min="0" class="form-control mb-2" name="price" placeholder="Price" required>
+          <div class="invalid-feedback">Please enter a valid price.</div>
+          <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required>
           </select>
-          <input type="number" step="0.01" class="form-control mb-2" name="price" placeholder="Price" required>
-          <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required></select>
+          <div class="invalid-feedback">Please select a branch.</div>
         </div>
         <div class="col-md-6">
           <div id="addItemOthersStockTypeContainer" class="d-none">
@@ -300,22 +309,31 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="editItemModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
-    <form id="editItemForm" class="modal-content" enctype="multipart/form-data" autocomplete="off">
+    <form id="editItemForm" class="modal-content" enctype="multipart/form-data" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Edit Item</h5></div>
       <div class="modal-body row g-2">
         <input type="hidden" name="id" id="editItemId">
         <div class="col-md-6">
-          <input class="form-control mb-2" name="name" id="editItemName" placeholder="Item Name" required>
-          <select class="form-select mb-2" name="category" id="editItemCategory">
-            <option value="">Select Category</option>
-            <option value="helmet">Helmet</option>
-            <option value="jacket">Jacket</option>
-            <option value="topbox">Topbox</option>
-            <option value="bracket">Bracket</option>
-            <option value="others">Others</option>
+          <div class="mb-2">
+            <input class="form-control" name="name" id="editItemName" placeholder="Item Name" required>
+            <div class="invalid-feedback">Item name is required.</div>
+          </div>
+          <div class="mb-2">
+            <select class="form-select" name="category" id="editItemCategory" required>
+              <option value="">Select Category</option>
+              <option value="helmet">Helmet</option>
+              <option value="jacket">Jacket</option>
+              <option value="topbox">Topbox</option>
+              <option value="bracket">Bracket</option>
+              <option value="others">Others</option>
+            </select>
+            <div class="invalid-feedback">Please select a category.</div>
+          </div>
+          <input type="number" step="0.01" min="0" class="form-control mb-2" name="price" id="editItemPrice" placeholder="Price" required>
+          <div class="invalid-feedback">Please enter a valid price.</div>
+          <select class="form-select mb-2" name="branch_id" id="editItemBranchSelect" required>
           </select>
-          <input type="number" step="0.01" class="form-control mb-2" name="price" id="editItemPrice" placeholder="Price" required>
-          <select class="form-select mb-2" name="branch_id" id="editItemBranchSelect" required></select>
+          <div class="invalid-feedback">Please select a branch.</div>
         </div>
         <div class="col-md-6">
           <div id="editItemOthersStockTypeContainer" class="d-none">
@@ -364,10 +382,13 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="addBranchModal" tabindex="-1">
   <div class="modal-dialog">
-    <form id="addBranchForm" class="modal-content" autocomplete="off">
+    <form id="addBranchForm" class="modal-content" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Add Branch</h5></div>
       <div class="modal-body">
-        <input id="addBranchName" class="form-control mb-2" name="branch_name" placeholder="Branch name" required>
+        <div class="mb-2">
+          <input id="addBranchName" class="form-control" name="branch_name" placeholder="Branch name" required>
+          <div class="invalid-feedback">Branch name is required.</div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -379,11 +400,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="editBranchModal" tabindex="-1">
   <div class="modal-dialog">
-    <form id="editBranchForm" class="modal-content" autocomplete="off">
+    <form id="editBranchForm" class="modal-content" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Edit Branch</h5></div>
       <div class="modal-body">
         <input type="hidden" name="id" id="editBranchId">
-        <input class="form-control mb-2" id="editBranchName" name="branch_name" placeholder="Branch name" required>
+        <div class="mb-2">
+          <input class="form-control" id="editBranchName" name="branch_name" placeholder="Branch name" required>
+          <div class="invalid-feedback">Branch name is required.</div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -395,10 +419,13 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="addSupplierModal" tabindex="-1">
   <div class="modal-dialog">
-    <form id="addSupplierForm" class="modal-content" autocomplete="off">
+    <form id="addSupplierForm" class="modal-content" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Add Supplier</h5></div>
       <div class="modal-body">
-        <input class="form-control mb-2" name="supplier_name" placeholder="Supplier Name" required>
+        <div class="mb-2">
+          <input class="form-control" name="supplier_name" placeholder="Supplier Name" required>
+          <div class="invalid-feedback">Supplier name is required.</div>
+        </div>
         <input type="email" class="form-control mb-2" name="email" placeholder="Email (optional)">
         <input type="tel" class="form-control mb-2" name="phone" placeholder="Phone Number (e.g., +63 912 345 6789)" pattern="[0-9\+\-\(\)\s]*" title="Numbers and signs like +, -, () are allowed.">
         <input class="form-control mb-2" name="location" placeholder="Location">
@@ -415,11 +442,14 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="editSupplierModal" tabindex="-1">
   <div class="modal-dialog">
-    <form id="editSupplierForm" class="modal-content" autocomplete="off">
+    <form id="editSupplierForm" class="modal-content" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Edit Supplier</h5></div>
       <div class="modal-body">
         <input type="hidden" name="id" id="editSupplierId">
-        <input class="form-control mb-2" name="supplier_name" id="editSupplierName" placeholder="Supplier Name" required>
+        <div class="mb-2">
+          <input class="form-control" name="supplier_name" id="editSupplierName" placeholder="Supplier Name" required>
+          <div class="invalid-feedback">Supplier name is required.</div>
+        </div>
         <input type="email" class="form-control mb-2" name="email" id="editSupplierEmail" placeholder="Email (optional)">
         <input type="tel" class="form-control mb-2" name="phone" id="editSupplierPhone" placeholder="Phone Number (e.g., +63 912 345 6789)" pattern="[0-9\+\-\(\)\s]*" title="Numbers and signs like +, -, () are allowed.">
         <input class="form-control mb-2" name="location" id="editSupplierLocation" placeholder="Location">
@@ -442,27 +472,35 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
                 <h5 class="modal-title" id="addConsignmentModalLabel">Add New Consignment</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="addConsignmentForm">
+            <form id="addConsignmentForm" novalidate>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="consignmentSupplier" class="form-label">Supplier</label>
                         <select class="form-select supplier-select" id="consignmentSupplier" name="supplier_id" required></select>
+                        <div class="invalid-feedback">Please select a supplier.</div>
                     </div>
                     <div class="mb-3">
                         <label for="consignmentBranch" class="form-label">Assign to Branch</label>
                         <select class="form-select" id="consignmentBranch" name="branch_id" required></select>
+                        <div class="invalid-feedback">Please select a branch.</div>
                     </div>
                     <div class="mb-3">
                         <label for="consignmentProduct" class="form-label">Product</label>
                         <select class="form-select" id="consignmentProduct" name="product_id" required></select>
+                        <div class="invalid-feedback">Please select a product.</div>
                     </div>
                     <div class="mb-3">
                         <label for="consignmentCostPrice" class="form-label">Cost Price (per item)</label>
-                        <input type="number" step="0.01" class="form-control" id="consignmentCostPrice" name="cost_price" required>
+                        <div class="input-group">
+                            <span class="input-group-text">₱</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control" id="consignmentCostPrice" name="cost_price" required>
+                            <div class="invalid-feedback">Please enter a valid cost price.</div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="consignmentQuantity" class="form-label">Quantity Consigned</label>
                         <input type="number" class="form-control" id="consignmentQuantity" name="quantity_consigned" required min="1">
+                        <div class="invalid-feedback">Please enter a quantity of at least 1.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -482,7 +520,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
                 <h5 class="modal-title" id="editConsignmentModalLabel">Edit Consignment</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="editConsignmentForm">
+            <form id="editConsignmentForm" novalidate>
                 <div class="modal-body">
                     <input type="hidden" name="id" id="editConsignmentId">
                     <div class="mb-3">
@@ -495,11 +533,15 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
                     </div>
                     <div class="mb-3">
                         <label for="editConsignmentCostPrice" class="form-label">Cost Price (per item)</label>
-                        <input type="number" step="0.01" class="form-control" id="editConsignmentCostPrice" name="cost_price" required>
+                        <div class="input-group">
+                            <span class="input-group-text">₱</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control" id="editConsignmentCostPrice" name="cost_price" required>
+                            <div class="invalid-feedback">Please enter a valid cost price.</div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="editConsignmentQuantity" class="form-label">Quantity Consigned</label>
-                        <input type="number" class="form-control" id="editConsignmentQuantity" name="quantity_consigned" required min="1">
+                        <input type="number" class="form-control" id="editConsignmentQuantity" name="quantity_consigned" required min="1"><div class="invalid-feedback">Quantity must be at least 1.</div>
                         <div class="form-text">Note: Changing this will adjust the main product stock.</div>
                     </div>
                 </div>
@@ -514,22 +556,31 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="registerModal" tabindex="-1">
   <div class="modal-dialog">
-    <form id="registerForm" class="modal-content" autocomplete="off">
+    <form id="registerForm" class="modal-content" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Add User</h5></div>
       <div class="modal-body">
-        <input class="form-control mb-2" name="username" placeholder="Username" required>
-        <input type="password" class="form-control mb-2" name="password" placeholder="Password" required>
+        <div class="mb-2">
+          <input class="form-control" name="username" placeholder="Username" required>
+          <div class="invalid-feedback">Username is required.</div>
+        </div>
+        <div class="mb-2">
+          <input type="password" class="form-control" name="password" placeholder="Password" required minlength="8">
+          <div class="invalid-feedback">Password is required and must be at least 8 characters.</div>
+        </div>
         <div id="registerEmailGroup" class="mb-2 d-none">
           <label for="registerEmail" class="form-label small text-muted">Email (Required for Owner)</label>
           <input type="email" class="form-control" id="registerEmail" name="email" placeholder="owner@example.com">
+          <div class="invalid-feedback">A valid email is required for owners.</div>
         </div>
         <select name="role" id="registerRole" class="form-select mb-2">
           <option value="staff">Staff</option>
           <option value="owner">Owner</option>
         </select>
-        <select name="branch_id" class="form-select mb-2" id="userBranchSelect">
-          <option value="">-- Assign to branch (optional) --</option>
-        </select>
+        <div class="mb-2">
+          <select name="branch_id" class="form-select" id="userBranchSelect">
+            <option value="">-- Assign to branch (optional) --</option>
+          </select>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -541,24 +592,31 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
 <div class="modal fade" id="editUserModal" tabindex="-1">
   <div class="modal-dialog">
-    <form id="editUserForm" class="modal-content" autocomplete="off">
+    <form id="editUserForm" class="modal-content" autocomplete="off" novalidate>
       <div class="modal-header"><h5 class="modal-title">Edit User</h5></div>
       <div class="modal-body">
         <input type="hidden" name="id" id="editUserId">
-        <input class="form-control mb-2" name="username" id="editUserName" placeholder="Username" required>
+        <div class="mb-2">
+          <input class="form-control" name="username" id="editUserName" placeholder="Username" required>
+          <div class="invalid-feedback">Username is required.</div>
+        </div>
         <div id="editEmailGroup" class="mb-2 d-none">
           <label for="editUserEmail" class="form-label small text-muted">Email (Required for Owner)</label>
           <input type="email" class="form-control" id="editUserEmail" name="email" placeholder="owner@example.com">
+          <div class="invalid-feedback">A valid email is required for owners.</div>
         </div>
         <select name="role" class="form-select mb-2" id="editUserRole">
           <option value="staff">Staff</option>
           <option value="owner">Owner</option>
         </select>
-        <select name="branch_id" class="form-select mb-2" id="editUserBranchSelect">
-          <option value="">-- Assign to branch (optional) --</option>
-        </select>
-        <label for="editUserPassword" class="form-label small text-muted">New Password (Optional)</label>
-        <input type="password" class="form-control" id="editUserPassword" name="password" placeholder="Leave blank to keep current password">
+        <div class="mb-2">
+          <select name="branch_id" class="form-select" id="editUserBranchSelect">
+            <option value="">-- Assign to branch (optional) --</option>
+          </select>
+        </div>
+        <label for="editUserPassword" class="form-label small text-muted">New Password (Optional - min 8 characters)</label>
+        <input type="password" class="form-control" id="editUserPassword" name="password" placeholder="Leave blank to keep current password" minlength="8">
+        <div class="invalid-feedback">Password must be at least 8 characters.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>

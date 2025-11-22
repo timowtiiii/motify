@@ -397,8 +397,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const addItemForm = document.getElementById('addItemForm');
   if(addItemForm) addItemForm.addEventListener('submit', e=>{
     e.preventDefault();
+    if (!addItemForm.checkValidity()) {
+      e.stopPropagation();
+      addItemForm.classList.add('was-validated');
+      return;
+    }
     const fd = new FormData(addItemForm);
-    fetch('api.php?action=add_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addItemModal'))?.hide(); loadInventory(); loadPOSProducts(); } else alert(res.error||'Error'); });
+    fetch('api.php?action=add_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addItemModal'))?.hide(); addItemForm.reset(); addItemForm.classList.remove('was-validated'); loadInventory(); loadPOSProducts(); } 
+      else alert(res.error||'Error'); 
+    });
   });
 
   // Add/Edit Modal Category Change Handler
@@ -456,8 +464,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const editItemForm = document.getElementById('editItemForm');
   if(editItemForm) editItemForm.addEventListener('submit', e=>{
     e.preventDefault();
+    if (!editItemForm.checkValidity()) {
+      e.stopPropagation();
+      editItemForm.classList.add('was-validated');
+      return;
+    }
     const fd = new FormData(editItemForm);
-    fetch('api.php?action=edit_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editItemModal'))?.hide(); loadInventory(); loadPOSProducts(); } else alert(res.error||'Error'); });
+    fetch('api.php?action=edit_product',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editItemModal'))?.hide(); editItemForm.classList.remove('was-validated'); loadInventory(); loadPOSProducts(); } 
+      else alert(res.error||'Error'); 
+    });
   });
 
   // Branches
@@ -474,11 +490,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Add branch
   const addBranchForm = document.getElementById('addBranchForm');
-  if(addBranchForm) addBranchForm.addEventListener('submit', e=>{ e.preventDefault(); const fd = new FormData(addBranchForm); fetch('api.php?action=add_branch',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addBranchModal'))?.hide(); loadBranches(); populateBranchSelects(); } else alert(res.error||'Error'); }); });
+  if(addBranchForm) addBranchForm.addEventListener('submit', e=>{ 
+    e.preventDefault(); 
+    if (!addBranchForm.checkValidity()) { e.stopPropagation(); addBranchForm.classList.add('was-validated'); return; }
+    const fd = new FormData(addBranchForm); 
+    fetch('api.php?action=add_branch',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addBranchModal'))?.hide(); addBranchForm.reset(); addBranchForm.classList.remove('was-validated'); loadBranches(); populateBranchSelects(); } 
+      else alert(res.error||'Error'); 
+    }); 
+  });
 
   // Edit branch
   const editBranchForm = document.getElementById('editBranchForm');
-  if(editBranchForm) editBranchForm.addEventListener('submit', e=>{ e.preventDefault(); const fd=new FormData(editBranchForm); fetch('api.php?action=edit_branch',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editBranchModal'))?.hide(); loadBranches(); populateBranchSelects(); } else alert(res.error||'Error'); }); });
+  if(editBranchForm) editBranchForm.addEventListener('submit', e=>{ 
+    e.preventDefault(); 
+    if (!editBranchForm.checkValidity()) { e.stopPropagation(); editBranchForm.classList.add('was-validated'); return; }
+    const fd=new FormData(editBranchForm); 
+    fetch('api.php?action=edit_branch',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editBranchModal'))?.hide(); editBranchForm.classList.remove('was-validated'); loadBranches(); populateBranchSelects(); } 
+      else alert(res.error||'Error'); 
+    }); 
+  });
 
   // Suppliers
   function loadSuppliers(){
@@ -524,15 +556,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const addSupplierForm = document.getElementById('addSupplierForm');
   if(addSupplierForm) addSupplierForm.addEventListener('submit', e=>{
     e.preventDefault();
+    if (!addSupplierForm.checkValidity()) { e.stopPropagation(); addSupplierForm.classList.add('was-validated'); return; }
     const fd = new FormData(addSupplierForm);
-    fetch('api.php?action=add_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'))?.hide(); loadSuppliers(); } else alert(res.error||'Error'); });
+    fetch('api.php?action=add_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'))?.hide(); addSupplierForm.reset(); addSupplierForm.classList.remove('was-validated'); loadSuppliers(); } 
+      else alert(res.error||'Error'); 
+    });
   });
 
   const editSupplierForm = document.getElementById('editSupplierForm');
   if(editSupplierForm) editSupplierForm.addEventListener('submit', e=>{
     e.preventDefault();
+    if (!editSupplierForm.checkValidity()) { e.stopPropagation(); editSupplierForm.classList.add('was-validated'); return; }
     const fd = new FormData(editSupplierForm);
-    fetch('api.php?action=edit_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('editSupplierModal'))?.hide(); loadSuppliers(); } else alert(res.error||'Error'); });
+    fetch('api.php?action=edit_supplier',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
+      if(res.ok){ 
+        bootstrap.Modal.getInstance(document.getElementById('editSupplierModal'))?.hide(); 
+        editSupplierForm.classList.remove('was-validated'); 
+        loadSuppliers(); 
+      } else {
+        alert(res.error||'Error'); 
+      }
+    });
   });
 
   // Consignment
@@ -643,6 +688,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if (addConsignmentForm) {
       addConsignmentForm.addEventListener('submit', e => {
           e.preventDefault();
+          if (!addConsignmentForm.checkValidity()) {
+            e.stopPropagation();
+            addConsignmentForm.classList.add('was-validated');
+            return;
+          }
           const form = e.target;
           const productId = form.querySelector('[name="product_id"]').value;
           const quantity = form.querySelector('[name="quantity_consigned"]').value;
@@ -665,6 +715,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
               if (res.ok) {
                   bootstrap.Modal.getInstance(document.getElementById('addConsignmentModal'))?.hide();
                   form.reset();
+                  form.classList.remove('was-validated');
                   loadConsignments();
                   loadInventory(); // Refresh inventory to reflect new stock
               } else {
@@ -678,10 +729,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if (editConsignmentForm) {
       editConsignmentForm.addEventListener('submit', e => {
           e.preventDefault();
+          if (!editConsignmentForm.checkValidity()) {
+            e.stopPropagation();
+            editConsignmentForm.classList.add('was-validated');
+            return;
+          }
           const fd = new FormData(editConsignmentForm);
           api('edit_consignment', { method: 'POST', body: fd }).then(res => {
               if (res.ok) {
                   bootstrap.Modal.getInstance(document.getElementById('editConsignmentModal'))?.hide();
+                  editConsignmentForm.classList.remove('was-validated');
                   loadConsignments();
                   loadInventory(); // Refresh inventory to reflect stock changes
               } else {
@@ -731,10 +788,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const registerForm = document.getElementById('registerForm');
   if(registerForm) registerForm.addEventListener('submit', e=>{ 
     e.preventDefault(); 
+    if (!registerForm.checkValidity()) { e.stopPropagation(); registerForm.classList.add('was-validated'); return; }
     const fd = new FormData(registerForm); 
     fetch('api.php?action=add_user',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{ 
-      if(res.ok){ bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide(); loadAccounts(); registerForm.reset(); } 
-      else alert(res.error||'Error'); 
+      if(res.ok){ 
+        bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide(); 
+        loadAccounts(); 
+        registerForm.reset(); 
+        registerForm.classList.remove('was-validated');
+      } else alert(res.error||'Error'); 
     }); 
   });
 
@@ -742,10 +804,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const editUserForm = document.getElementById('editUserForm');
   if(editUserForm) editUserForm.addEventListener('submit', e=>{
     e.preventDefault(); 
+    if (!editUserForm.checkValidity()) { e.stopPropagation(); editUserForm.classList.add('was-validated'); return; }
     const fd = new FormData(editUserForm); 
     fetch('api.php?action=edit_user',{ method:'POST', body: fd }).then(r=>r.json()).then(res=>{
       if(res.ok){ 
         bootstrap.Modal.getInstance(document.getElementById('editUserModal'))?.hide(); 
+        editUserForm.classList.remove('was-validated');
         loadAccounts(); 
       } else alert(res.error||'Error'); 
     }); 
@@ -756,8 +820,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const emailGroup = document.getElementById('registerEmailGroup');
     if (e.target.value === 'owner') {
       emailGroup.classList.remove('d-none');
+      emailGroup.querySelector('input').required = true;
     } else {
       emailGroup.classList.add('d-none');
+      emailGroup.querySelector('input').required = false;
     }
   });
 
@@ -765,8 +831,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const emailGroup = document.getElementById('editEmailGroup');
     if (e.target.value === 'owner') {
       emailGroup.classList.remove('d-none');
+      emailGroup.querySelector('input').required = true;
     } else {
       emailGroup.classList.add('d-none');
+      emailGroup.querySelector('input').required = false;
     }
   });
 
@@ -1096,6 +1164,23 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
     timeRangeContainer.classList.remove('d-none');
     salesLogBtn.classList.add('active');
     actionLogBtn.classList.remove('active');
+  });
+
+  // Add event listeners to all modals to reset forms when they are hidden
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('hidden.bs.modal', () => {
+      const form = modal.querySelector('form');
+      if (form) {
+        form.reset();
+        form.classList.remove('was-validated');
+      }
+      // Also reset any image previews
+      const preview = modal.querySelector('img[id$="Preview"], img[id$="CurrentImg"]');
+      if (preview) {
+        preview.style.display = 'none';
+        preview.src = '';
+      }
+    });
   });
 
   // Init

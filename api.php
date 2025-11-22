@@ -355,10 +355,11 @@ try {
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $name = trim($_POST['item_name'] ?? $_POST['name'] ?? '');
-      if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
+      if($name==='') jsonRes(['ok'=>false,'error'=>'Item name is required.']);
       $sku = trim($_POST['sku'] ?? '');
       $category = trim($_POST['category'] ?? '');
-      $price = floatval($_POST['price'] ?? 0);
+      if(!isset($_POST['price']) || !is_numeric($_POST['price']) || floatval($_POST['price']) < 0) jsonRes(['ok'=>false,'error'=>'A valid, non-negative price is required.']);
+      $price = floatval($_POST['price']);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       // file upload
       $photo_path = null;
@@ -418,10 +419,11 @@ try {
       if($method!=='POST') jsonRes(['ok'=>false,'error'=>'POST required']);
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
       $id = intval($_POST['id'] ?? 0); if(!$id) jsonRes(['ok'=>false,'error'=>'missing id']);
-      $name = trim($_POST['name'] ?? $_POST['item_name'] ?? ''); if($name==='') jsonRes(['ok'=>false,'error'=>'missing name']);
+      $name = trim($_POST['name'] ?? $_POST['item_name'] ?? ''); if($name==='') jsonRes(['ok'=>false,'error'=>'Item name is required.']);
       $sku = trim($_POST['sku'] ?? '');
       $category = trim($_POST['category'] ?? '');
-      $price = floatval($_POST['price'] ?? 0);
+      if(!isset($_POST['price']) || !is_numeric($_POST['price']) || floatval($_POST['price']) < 0) jsonRes(['ok'=>false,'error'=>'A valid, non-negative price is required.']);
+      $price = floatval($_POST['price']);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       // handle photo
       $photo_path = null;
@@ -523,7 +525,8 @@ try {
       $role = ($_POST['role'] ?? 'staff')==='owner' ? 'owner' : 'staff';
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       $password = $_POST['password'] ?? '';
-      $email = trim($_POST['email'] ?? '');
+      $email = trim($_POST['email'] ?? '');      
+      if(strlen($password) < 8) jsonRes(['ok'=>false,'error'=>'Password must be at least 8 characters.']);
       if($username==='' || $password==='') jsonRes(['ok'=>false,'error'=>'missing']);
       if($role === 'owner' && !filter_var($email, FILTER_VALIDATE_EMAIL)) jsonRes(['ok'=>false,'error'=>'A valid email is required for the owner role.']);
       $stmt = $mysqli->prepare("SELECT id FROM users WHERE username=? LIMIT 1"); $stmt->bind_param('s',$username); $stmt->execute(); $res = $stmt->get_result();
@@ -548,6 +551,7 @@ try {
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
       $password = $_POST['password'] ?? '';
 
+      if($password !== '' && strlen($password) < 8) jsonRes(['ok'=>false,'error'=>'New password must be at least 8 characters long.']);
       if($role === 'owner' && !filter_var($email, FILTER_VALIDATE_EMAIL)) jsonRes(['ok'=>false,'error'=>'A valid email is required for the owner role.']);
 
       // Start transaction
