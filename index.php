@@ -101,6 +101,7 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           </div>
           <div class="d-flex flex-row gap-2 mb-3">
             <select id="filterBranch" class="form-select form-select-sm" style="width:220px"></select>
+            <select id="inventorySupplierFilter" class="form-select form-select-sm supplier-select" style="width:220px"></select>
             <select id="inventoryStockLevelFilter" class="form-select form-select-sm" style="width:220px">
                 <option value="">All Stock Levels</option>
                 <option value="high">High Stock</option>
@@ -125,11 +126,26 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 
       <div id="panel-suppliers" class="d-none mb-3">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h4 class="text-primary">Suppliers</h4>
-          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplierModal">➕ Add Supplier</button>
+          <h4 class="text-primary">Suppliers & Orders</h4>
+          <div>
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#createOrderModal">📝 New Order</button>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplierModal">➕ Add Supplier</button>
+          </div>
+        </div>
+        <div class="card p-3 mb-3">
+          <h5>Suppliers List</h5>
+          <div id="suppliersContent" class="table-responsive"></div>
         </div>
         <div class="card p-3">
-          <div id="suppliersContent" class="table-responsive"></div>
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5>Purchase Orders</h5>
+                        <div class="d-flex gap-2">
+                          <select id="poYearFilter" class="form-select form-select-sm" style="width: 100px;"></select>
+                          <select id="poMonthFilter" class="form-select form-select-sm" style="width: 120px;"></select>
+                          <select id="poWeekFilter" class="form-select form-select-sm" style="width: 120px;"></select>
+                          <button id="downloadPoPdf" class="btn btn-outline-danger btn-sm">Download PDF</button>
+                        </div>
+                      </div>          <div id="ordersContent" class="table-responsive"></div>
         </div>
       </div>
 
@@ -246,6 +262,8 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <div class="invalid-feedback">Please enter a valid price.</div>
           <select class="form-select mb-2" name="branch_id" id="addItemBranchSelect" required>
           </select>
+          <label class="small text-muted">Supplier</label>
+          <select class="form-select mb-2 supplier-select" name="supplier_id" required></select>
           <div class="invalid-feedback">Please select a branch.</div>
         </div>
         <div class="col-md-6">
@@ -318,6 +336,8 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
           <div class="invalid-feedback">Please enter a valid price.</div>
           <select class="form-select mb-2" name="branch_id" id="editItemBranchSelect" required>
           </select>
+          <label class="small text-muted">Supplier</label>
+          <select class="form-select mb-2 supplier-select" name="supplier_id" id="editItemSupplierSelect" required></select>
           <div class="invalid-feedback">Please select a branch.</div>
         </div>
         <div class="col-md-6">
@@ -444,6 +464,64 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-primary" type="submit">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create Order Modal -->
+<div class="modal fade" id="createOrderModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form id="createOrderForm" class="modal-content" autocomplete="off" novalidate>
+      <div class="modal-header">
+        <h5 class="modal-title">Create New Order</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label for="orderBranchSelect" class="form-label">Branch</label>
+                <select class="form-select" id="orderBranchSelect" required>
+                    <option value="">-- Select a Branch --</option>
+                </select>
+                <div class="invalid-feedback">Please select a branch.</div>
+            </div>
+            <div class="col-md-6">
+                <label for="orderSupplierSelect" class="form-label">Supplier</label>
+                <select class="form-select supplier-select" id="orderSupplierSelect" required disabled>
+                    <option value="">-- Select a branch first --</option>
+                </select>
+                <div class="invalid-feedback">Please select a supplier.</div>
+            </div>
+        </div>
+        <hr>
+        <h6>Order Items</h6>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label for="orderProductSelect" class="form-label">Product</label>
+            <select class="form-select" id="orderProductSelect" disabled>
+              <option>-- Select branch and supplier --</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label for="orderProductSize" class="form-label">Size</label>
+            <select class="form-select" id="orderProductSize"></select>
+          </div>
+          <div class="col-md-2">
+            <label for="orderQuantity" class="form-label">Quantity</label>
+            <input type="number" class="form-control" id="orderQuantity" min="1" value="1">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="button" class="btn btn-secondary w-100" id="addOrderItemBtn">Add</button>
+          </div>
+        </div>
+        <div id="orderItemsList" class="table-responsive">
+          <!-- Items will be added here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Place Order</button>
       </div>
     </form>
   </div>
@@ -621,9 +699,30 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
       <div class="modal-body">
         <div id="checkoutItems"></div>
         <hr>
-        <div class="d-flex justify-content-between fw-bold">
-          <span>Total:</span>
-          <span>₱<span id="checkoutTotal">0.00</span></span>
+        <div class="mt-3">
+          <label>Discount (%)</label>
+          <div class="input-group">
+            <input type="number" id="discountPercent" class="form-control" placeholder="Enter discount percentage" value="0" min="0" max="100">
+          </div>
+        </div>
+        <hr>
+        <div id="checkoutSummary">
+          <div class="d-flex justify-content-between">
+            <span>Subtotal:</span>
+            <span>₱<span id="checkoutSubtotal">0.00</span></span>
+          </div>
+          <div class="d-flex justify-content-between text-danger">
+            <span>Discount:</span>
+            <span>- ₱<span id="checkoutDiscount">0.00</span></span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span>VAT (12%):</span>
+            <span>+ ₱<span id="checkoutVat">0.00</span></span>
+          </div>
+          <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-2">
+            <span>Total:</span>
+            <span>₱<span id="checkoutTotal">0.00</span></span>
+          </div>
         </div>
         <div class="mt-3">
           <label>Payment Method</label>
@@ -670,37 +769,5 @@ $assigned_branch = $_SESSION['assigned_branch_id'] ?? null;
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="script.js"></script>
-<script>
-    // Set the default value of the week input to the current week
-    document.addEventListener('DOMContentLoaded', function() {
-        const weekInput = document.getElementById('week-selector');
-        const now = new Date();
-        const year = now.getFullYear();
-        const week = Math.ceil((((now - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
-        if(weekInput) weekInput.value = `${year}-W${String(week).padStart(2, '0')}`;
-    });
-
-    // Function to handle panel switching
-    function handleMenuClick(e) {
-        const targetId = e.currentTarget.id.replace('menu-', '');
-        document.querySelectorAll('.sidebar .list-group-item').forEach(btn => btn.classList.remove('active'));
-        e.currentTarget.classList.add('active');
-        document.querySelectorAll('.main-content > div[id^="panel-"]').forEach(panel => panel.classList.add('d-none'));
-        const activePanel = document.getElementById(`panel-${targetId}`);
-        if (activePanel) {
-          activePanel.classList.remove('d-none');          // If the consignment panel is now active, load its data.
-          // This assumes you have a `loadConsignments` function in script.js
-          if (targetId === 'consignment' && typeof loadConsignments === 'function') {
-            loadConsignments();
-          }
-        }
-    }
-
-    // Attach event listeners to all sidebar menu buttons
-    document.querySelectorAll('.sidebar .list-group-item').forEach(button => {
-        button.removeEventListener('click', handleMenuClick); // Prevent duplicate listeners
-        button.addEventListener('click', handleMenuClick);
-    });
-</script>
 </body>
 </html>

@@ -137,6 +137,86 @@ try {
       jsonRes(['ok'=>false,'error'=>$mysqli->error]);
       break;
 
+    // ---------------- ORDERS ----------------
+    case 'get_orders':
+      if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
+      
+      $year = isset($_GET['year']) && $_GET['year'] !== '' ? intval($_GET['year']) : null;
+      $month = isset($_GET['month']) && $_GET['month'] !== '' ? intval($_GET['month']) : null;
+      $week_start_day = isset($_GET['week']) && $_GET['week'] !== '' ? intval($_GET['week']) : null;
+
+      $sql = "SELECT o.id, o.order_date, o.status, s.name as supplier_name 
+              FROM orders o 
+              JOIN suppliers s ON o.supplier_id = s.id";
+      
+      $where = [];
+      $params = [];
+      $types = '';
+
+      if ($year) {
+          $where[] = "YEAR(o.order_date) = ?";
+          $params[] = $year;
+          $types .= 'i';
+      }
+      if ($month) {
+          $where[] = "MONTH(o.order_date) = ?";
+          $params[] = $month;
+          $types .= 'i';
+      }
+      if ($week_start_day && $year && $month) {
+          try {
+              $start_date = new DateTime("$year-$month-$week_start_day");
+              $end_date = clone $start_date;
+              $end_date->modify('+6 days');
+              
+              $where[] = "o.order_date >= ?";
+              $params[] = $start_date->format('Y-m-d');
+              $types .= 's';
+
+              $where[] = "o.order_date <= ?";
+              $params[] = $end_date->format('Y-m-d 23:59:59');
+              $types .= 's';
+
+          } catch (Exception $e) {
+              // Ignore invalid date
+          }
+      }
+
+      if (!empty($where)) {
+          $sql .= " WHERE " . implode(' AND ', $where);
+      }
+
+      $sql .= " ORDER BY o.order_date DESC";
+      
+      $stmt = $mysqli->prepare($sql);
+      if ($stmt === false) jsonRes(['ok' => false, 'error' => $mysqli->error]);
+
+      if (!empty($params)) {
+          $stmt->bind_param($types, ...$params);
+      }
+
+      $stmt->execute();
+      $res = $stmt->get_result();
+      
+      if (!$res) jsonRes(['ok' => false, 'error' => $mysqli->error]);
+
+      $orders = [];
+      while($order = $res->fetch_assoc()){
+          $item_res = $mysqli->query("SELECT oi.quantity, oi.size, p.name as product_name 
+                                      FROM order_items oi 
+                                      JOIN products p ON oi.product_id = p.id 
+                                      WHERE oi.order_id = " . $order['id']);
+          $items = [];
+          while($item = $item_res->fetch_assoc()){
+              $items[] = $item;
+          }
+          $order['items'] = $items;
+          $orders[] = $order;
+      }
+      jsonRes(['ok'=>true, 'orders'=>$orders]);
+      break;
+
+
     // ---------------- CONSIGNMENT ----------------
     case 'get_consignments':
       if(!is_owner()) jsonRes(['ok'=>false,'error'=>'forbidden']);
@@ -293,6 +373,11 @@ try {
         $join_clause = "LEFT JOIN branches b ON p.branch_id = b.id";
         $where_conditions = "1=1";
 
+        if (isset($_GET['supplier_id']) && $_GET['supplier_id'] !== '') {
+            $supplier_id = intval($_GET['supplier_id']);
+            $where_conditions .= " AND p.supplier_id = $supplier_id";
+        }
+
         if ($stock_level !== '') {
             $join_clause .= " JOIN product_stocks ps ON p.id = ps.product_id";
             if ($stock_level === 'low') {
@@ -303,12 +388,14 @@ try {
                 $where_conditions .= " AND ps.quantity > 10";
             }
         }
-        $sql = "SELECT 
+        $sql = "SELECT
                     p.id, p.sku, p.name, p.category, p.price, p.branch_id, 
+                    p.supplier_id,
                     COALESCE(p.photo, '') AS photo, 
-                    b.name AS branch_name,                    
+                    b.name AS branch_name,
+                    s.name AS supplier_name,
                     (SELECT SUM(c.quantity_consigned - c.quantity_sold) FROM consignments c WHERE c.product_id = p.id AND c.status = 'active') AS consigned_stock
-                FROM products p $join_clause WHERE $where_conditions";
+                FROM products p $join_clause LEFT JOIN suppliers s ON p.supplier_id = s.id WHERE $where_conditions";
         if ($branch !== null && $branch !== '') {
             $sql .= " AND p.branch_id = " . intval($branch);
         }
@@ -402,17 +489,22 @@ try {
       if(!isset($_POST['price']) || !is_numeric($_POST['price']) || floatval($_POST['price']) < 0) jsonRes(['ok'=>false,'error'=>'A valid, non-negative price is required.']);
       $price = floatval($_POST['price']);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
+      $supplier_id = (isset($_POST['supplier_id']) && $_POST['supplier_id']!=='') ? intval($_POST['supplier_id']) : null;
+      if ($supplier_id === null) {
+          jsonRes(['ok'=>false,'error'=>'Supplier is a required field.']);
+      }
       // file upload
       $photo_path = null;
       if(!empty($_FILES['photo']['name'])){
         if(!is_dir('uploads')) @mkdir('uploads',0755,true);
         $fname = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/','_',basename($_FILES['photo']['name']));
         $target = 'uploads/'.$fname;
-        if(move_uploaded_file($_FILES['photo']['tmp_name'],$target)) $photo_path = $fname;
+        if(move_uploaded_file($_FILES['photo']['tmp_name'],$target)) $photo_path = $target;
       }
-      $sql = "INSERT INTO products (sku,name,category,price,branch_id,photo) VALUES (?,?,?,?,?,?)";
-            $stmt = $mysqli->prepare($sql);
-      $stmt->bind_param('sssdis', $sku,$name,$category,$price,$branch_id,$photo_path);
+      $sql = "INSERT INTO products (sku, name, category, price, branch_id, supplier_id, photo) VALUES (?, ?, ?, ?, ?, ?, ?)";
+      $stmt = $mysqli->prepare($sql);
+      $stmt->bind_param('sssdiis', $sku, $name, $category, $price, $branch_id, $supplier_id, $photo_path);
+
       if($stmt->execute()) {
         $product_id = $stmt->insert_id;
         
@@ -467,6 +559,10 @@ try {
       if(!isset($_POST['price']) || !is_numeric($_POST['price']) || floatval($_POST['price']) < 0) jsonRes(['ok'=>false,'error'=>'A valid, non-negative price is required.']);
       $price = floatval($_POST['price']);
       $branch_id = (isset($_POST['branch_id']) && $_POST['branch_id']!=='') ? intval($_POST['branch_id']) : null;
+      $supplier_id = (isset($_POST['supplier_id']) && $_POST['supplier_id']!=='') ? intval($_POST['supplier_id']) : null;
+      if ($supplier_id === null) {
+          jsonRes(['ok'=>false,'error'=>'Supplier is a required field.']);
+      }
       // handle photo
 
       // --- START: Fetch old data for detailed logging ---
@@ -506,10 +602,12 @@ try {
       $fields[] = "name=?"; $types.='s'; $vals[]=$name;
       $fields[] = "category=?"; $types.='s'; $vals[]=$category;
       $fields[] = "price=?"; $types.='d'; $vals[]=$price;
-      if($branch_id===null) $fields[] = "branch_id = NULL";
-      else { $fields[] = "branch_id = ?"; $types.='i'; $vals[]=$branch_id;}
+
+      $fields[] = "branch_id = ?"; $types.='i'; $vals[]=$branch_id;
+      $fields[] = "supplier_id = ?"; $types.='i'; $vals[]=$supplier_id;
+
       if ($photo_path !== null) {
-          $fields[] = "photo = ?"; $types.='s'; $vals[] = $photo_path;
+          $fields[] = "photo = ?"; $types.='s'; $vals[] = $photo_path; // This was $fname, should be $photo_path
       }
       $sql = "UPDATE products SET ".implode(', ',$fields)." WHERE id=?";
       $types .= 'i'; $vals[] = $id;
@@ -544,8 +642,8 @@ try {
                 if (isset($_POST['stock_' . $size])) {
                     $quantity = intval($_POST['stock_' . $size]);
                     if ($quantity >= 0) {
-                            $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?");
-                            $stock_stmt->bind_param('isii', $id, $size, $quantity, $quantity);
+                            $stock_stmt = $mysqli->prepare("INSERT INTO product_stocks (product_id, size, quantity) VALUES (?, ?, ?)");
+                            $stock_stmt->bind_param('isi', $id, $size, $quantity);
                         $stock_stmt->execute();
                     }
                 }
@@ -803,13 +901,17 @@ case 'get_stats':
   $payment = $payload['payment_mode'] ?? ($payload['payment'] ?? 'Cash');
   $branch_id = isset($payload['branch_id']) && $payload['branch_id'] !== '' ? intval($payload['branch_id']) : null;
   $user_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
+  $discount_percentage = floatval($payload['discount_percent'] ?? 0);
+  if ($discount_percentage < 0 || $discount_percentage > 100) {
+    $discount_percentage = 0;
+  }
 
   if (!is_array($items) || empty($items)) jsonRes(['ok' => false, 'error' => 'cart empty']);
 
   $mysqli->begin_transaction();
   $detailed = [];
-  $total = 0.0;
-
+  $subtotal = 0.0;
+  
   foreach ($items as $it) {
     $pid = intval($it['id']);
     $qty = intval($it['qty']);
@@ -834,15 +936,14 @@ case 'get_stats':
     }
     if ($qty <= 0) continue;
 
-    $line = (floatval($row['price']) * 1.12) * $qty; // Use VAT-inclusive price for line total
-    $total += $line;
+    $subtotal += floatval($row['price']) * $qty;
     $detailed[] = [
       'id' => intval($row['id']),
       'name' => $row['name'],
       'qty' => $qty,
       'size' => $size,
       'base_price' => floatval($row['price']), // Store the pre-VAT price
-      'price' => floatval($row['price']) * 1.12 // Store the final VAT-inclusive price
+      'price' => floatval($row['price']) * 1.12 // Store the final VAT-inclusive price per item for receipt
     ];
 
     $stmt2 = $mysqli->prepare("UPDATE product_stocks SET quantity = quantity - ? WHERE product_id=? AND size = ? AND quantity >= ?");
@@ -850,7 +951,6 @@ case 'get_stats':
     $stmt2->execute();
 
     // --- START CONSIGNMENT UPDATE ---
-    // Find active consignments for the sold product and update them.
     $qty_to_process = $qty;
     $active_consignments_stmt = $mysqli->prepare(
         "SELECT id, quantity_consigned, quantity_sold 
@@ -867,20 +967,15 @@ case 'get_stats':
 
     while ($c = $active_consignments_res->fetch_assoc()) {
         if ($qty_to_process <= 0) break;
-
         $remaining_in_batch = $c['quantity_consigned'] - $c['quantity_sold'];
         $deduct_from_this_batch = min($qty_to_process, $remaining_in_batch);
-
         $new_sold_qty = $c['quantity_sold'] + $deduct_from_this_batch;
         $update_sold_stmt->bind_param('ii', $new_sold_qty, $c['id']);
         $update_sold_stmt->execute();
-
-        // If this batch is now fully sold, mark it as paid.
         if ($new_sold_qty >= $c['quantity_consigned']) {
             $mark_paid_stmt->bind_param('i', $c['id']);
             $mark_paid_stmt->execute();
         }
-
         $qty_to_process -= $deduct_from_this_batch;
     }
     // --- END CONSIGNMENT UPDATE ---
@@ -895,28 +990,27 @@ case 'get_stats':
     $mysqli->rollback();
     jsonRes(['ok' => false, 'error' => 'no valid items']);
   }
+  
+  $discount_amount = ($subtotal * $discount_percentage) / 100;
+  $total_after_discount = $subtotal - $discount_amount;
+  $vat_amount = $total_after_discount * 0.12;
+  $total = $total_after_discount + $vat_amount;
+  $vatable_sales = $total_after_discount;
 
   $receipt_no = 'RCPT-' . strtoupper(uniqid());
   $items_json = json_encode($detailed, JSON_UNESCAPED_UNICODE);
-  $current_time = date('Y-m-d H:i:s'); // Use PHP-generated time
+  $current_time = date('Y-m-d H:i:s');
 
   $stmt = $mysqli->prepare("INSERT INTO receipts (receipt_no, items, total, payment_mode, branch_id, created_by, created_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?)");
   $stmt->bind_param('ssdsiis', $receipt_no, $items_json, $total, $payment, $branch_id, $user_id, $current_time);
 
   if ($stmt->execute()) {
-    // ✅ Log action
     $meta = 'receipt:' . $receipt_no;
     $log = $mysqli->prepare("INSERT INTO action_logs (user_id, action, meta, branch_id) VALUES (?, 'checkout', ?, ?)");
     $log->bind_param('isi', $user_id, $meta, $branch_id);
     $log->execute();
-
     $mysqli->commit();
-
-    // Calculate VAT details assuming the total is VAT-inclusive
-    $vat_rate = 0.12; // 12%
-    $vatable_sales = $total / (1 + $vat_rate);
-    $vat_amount = $total - $vatable_sales;
 
     jsonRes([
         'ok' => true, 
@@ -927,7 +1021,8 @@ case 'get_stats':
         'timestamp' => $current_time,
         'username' => $_SESSION['username'] ?? 'N/A',
         'vatable_sales' => $vatable_sales,
-        'vat_amount' => $vat_amount
+        'vat_amount' => $vat_amount,
+        'discount' => $discount_amount
     ]);
   } else {
     $mysqli->rollback();
@@ -936,6 +1031,7 @@ case 'get_stats':
   break;
 
     // --------------------------------------------------------------------------------------------------------------------
+
 
 
     case 'get_dashboard_data':

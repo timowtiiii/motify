@@ -96,14 +96,29 @@ document.addEventListener('DOMContentLoaded', ()=>{
             inventoryRefreshInterval = null;
         }
     }
+
+    // Load data for the activated panel
+    switch(name) {
+      case 'suppliers':
+        loadSuppliers();
+        loadOrders();
+        break;
+      case 'logs':
+        loadActionLogs();
+        break;
+      case 'consignment':
+        loadConsignments();
+        break;
+    }
   }
   ['dashboard','inventory','branches','suppliers','accounts','consignment','logs','pos'].forEach(id=>{
     const el = document.getElementById('menu-'+id); if(!el) return;
-    el.addEventListener('click', ()=> showPanel(id)); if (id === 'logs') el.addEventListener('click', loadActionLogs); if (id === 'suppliers') el.addEventListener('click', loadSuppliers); if (id === 'consignment') el.addEventListener('click', loadConsignments);
+    el.addEventListener('click', ()=> showPanel(id));
   });
 
   // CART
   window.CART = window.CART || [];
+
   function addToCart(id, size, qty = 1) {
     qty = parseInt(qty || 1, 10);
     const ex = CART.find(x => x.id == id && x.size == size);
@@ -132,7 +147,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   function populateBranchSelects(){
     return api('get_branches').then(res=>{
       if(!res.ok) return;
-      const selects = document.querySelectorAll('#posBranchSelect,#filterBranch,#addItemBranchSelect,#editItemBranchSelect,#userBranchSelect,#editUserBranchSelect');
+      const selects = document.querySelectorAll('#posBranchSelect,#filterBranch,#addItemBranchSelect,#editItemBranchSelect,#userBranchSelect,#editUserBranchSelect,#orderBranchSelect');
       selects.forEach(s=>{
         if(!s) return;
         s.innerHTML = '<option value="">All Branches</option>' + res.branches.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
@@ -310,10 +325,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const category = document.querySelector('#inventoryCategoryFilter .btn.active')?.dataset.category || '';
     const branch = document.getElementById('filterBranch') ? document.getElementById('filterBranch').value : '';
     const stockLevel = document.getElementById('inventoryStockLevelFilter') ? document.getElementById('inventoryStockLevelFilter').value : '';
-    api('get_products',{ params:{ q:q, category: category, branch_id: branch, source: 'inventory', stock_level: stockLevel } }).then(res=>{
+    const supplierId = document.getElementById('inventorySupplierFilter') ? document.getElementById('inventorySupplierFilter').value : ''; // Get the selected supplier
+  
+    // Correctly pass all parameters, including supplier_id
+    api('get_products',{ params:{ q:q, category: category, branch_id: branch, source: 'inventory', stock_level: stockLevel, supplier_id: supplierId } }).then(res=>{
       if(!res.ok) { console.error(res.error); return; }
-      console.log(res.products);
-
       const getStockLevelIndicator = (quantity) => {
         const qty = Number(quantity);
         let color = 'danger'; // red for 0
@@ -341,6 +357,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <td>${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.category || '')}</td>
         <td>₱${formatCurrency(p.price || 0)}</td>
+        <td>${escapeHtml(p.supplier_name || '')}</td>
         <td style="min-width: 150px;">
           ${(p.stocks && p.stocks.length > 0)
             ? p.stocks.map(s => `<div class="d-flex align-items-center mb-1"><div class="me-2" style="width:50px;">${s.size === 'os' ? 'Stock' : s.size.toUpperCase()}:</div><div class="flex-grow-1">${getStockLevelIndicator(s.quantity)}</div></div>`).join('')
@@ -353,7 +370,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <td>${escapeHtml(p.branch_name || '')}</td>
         <td>${USER_ROLE === 'owner' ? `<button class="btn btn-sm btn-outline-primary edit-product" data-id="${p.id}">Edit</button> <button class="btn btn-sm btn-danger delete-product" data-id="${p.id}">Delete</button>` : 'Read-only'}</td>
       </tr>`).join('');
-      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Consignment</th><th>Branch</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+      tbl.innerHTML = `<table class="table"><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Supplier</th><th>Stock</th><th>Consignment</th><th>Branch</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
       document.querySelectorAll('.edit-product').forEach(btn=> btn.addEventListener('click', ()=>{
         const id = btn.dataset.id;
         const prod = res.products.find(x=>x.id==id);
@@ -375,8 +392,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
             document.getElementById('editItemOthersStockTypeContainer')
         );
 
-        // Also trigger the 'others' stock type handler if needed
+        // Also trigger the 'others' stock type handler if needed and SET THE VALUE
         handleOthersStockTypeChange(stockType, document.getElementById('editItemSizeStock'), document.getElementById('editItemRegularStock'));
+        const othersStockTypeSelect = document.querySelector('#editItemModal select[name="others_stock_type"]');
+        if (othersStockTypeSelect) {
+            othersStockTypeSelect.value = stockType;
+        }
+        
         document.getElementById('editItemPrice').value = prod.price;
 
         // Reset all stock fields
@@ -397,7 +419,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 if(input) input.value = s.quantity;
             });
         }
-        setTimeout(()=>{ const sel=document.getElementById('editItemBranchSelect'); if(sel) sel.value = prod.branch_id||''; },120);
+        setTimeout(()=>{ 
+          const sel=document.getElementById('editItemBranchSelect'); if(sel) sel.value = prod.branch_id||''; 
+          const supSel = document.getElementById('editItemSupplierSelect'); if(supSel) supSel.value = prod.supplier_id || ''; // Set supplier
+        },120);
         document.getElementById('editItemCurrentImg').src = prod.photo || 'uploads/no-image.png'; document.getElementById('editItemCurrentImg').style.display='block';
         new bootstrap.Modal(document.getElementById('editItemModal')).show();
       }));
@@ -411,6 +436,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('inventorySearch')?.addEventListener('input', debounce(loadInventory, 300));
   document.getElementById('filterBranch')?.addEventListener('change', loadInventory);
   document.getElementById('inventoryStockLevelFilter')?.addEventListener('change', loadInventory);
+  document.getElementById('inventorySupplierFilter')?.addEventListener('change', loadInventory);
 
   // Add product form
   const addItemForm = document.getElementById('addItemForm');
@@ -664,44 +690,56 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('consignmentSupplierFilter')?.addEventListener('change', loadConsignments);
 
   document.getElementById('addConsignmentBtn')?.addEventListener('click', () => {
-      // Populate products in the modal
-      const productSelect = document.getElementById('consignmentProduct');
+      new bootstrap.Modal(document.getElementById('addConsignmentModal')).show();
+  });
+
+  const addConsignmentModal = document.getElementById('addConsignmentModal');
+  if (addConsignmentModal) {
       const branchSelect = document.getElementById('consignmentBranch');
+      const supplierSelect = document.getElementById('consignmentSupplier');
+      const productSelect = document.getElementById('consignmentProduct');
 
-      // Reset and disable product dropdown initially
-      productSelect.innerHTML = '<option value="">Select a branch first</option>';
-      productSelect.disabled = true;
-      branchSelect.innerHTML = '<option value="">Loading branches...</option>';
+      const loadConsignmentProducts = async () => {
+          const branchId = branchSelect.value;
+          const supplierId = supplierSelect.value;
 
-      // Populate branches first
-      api('get_branches').then(res => {
-          if(res.ok) branchSelect.innerHTML = '<option value="">Select Branch</option>' + res.branches.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
-      });
-
-      // Add a one-time event listener for the branch change
-      const branchChangeHandler = () => {
-          const selectedBranchId = branchSelect.value;
           productSelect.disabled = true;
+          productSelect.innerHTML = '<option>Loading...</option>';
 
-          if (!selectedBranchId) {
-              productSelect.innerHTML = '<option value="">Select a branch first</option>';
+          if (!branchId || !supplierId) {
+              productSelect.innerHTML = '<option>-- Select branch and supplier --</option>';
               return;
           }
 
-          productSelect.innerHTML = '<option value="">Loading products...</option>';
-          // Fetch products filtered by the selected branch
-          api('get_products', { params: { source: 'inventory', branch_id: selectedBranchId } }).then(res => {
-              if (res.ok) {
-                  productSelect.innerHTML = '<option value="">Select Product</option>' + res.products.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-                  productSelect.disabled = false;
-              }
-          });
+          const res = await api('get_products', { params: { source: 'inventory', branch_id: branchId, supplier_id: supplierId } });
+          if (res.ok && res.products && res.products.length > 0) {
+              productSelect.innerHTML = '<option value="">-- Select a product --</option>';
+              res.products.forEach(p => {
+                  productSelect.innerHTML += `<option value="${p.id}">${escapeHtml(p.name)}</option>`;
+              });
+              productSelect.disabled = false;
+          } else {
+              productSelect.innerHTML = '<option>-- No products found for this supplier in this branch --</option>';
+          }
       };
 
-      branchSelect.addEventListener('change', branchChangeHandler);
+      addConsignmentModal.addEventListener('show.bs.modal', async () => {
+          // Reset and disable product dropdown initially
+          productSelect.innerHTML = '<option value="">Select a branch and supplier first</option>';
+          productSelect.disabled = true;
+          
+          branchSelect.innerHTML = '<option value="">Loading branches...</option>';
+          
+          // Populate branches
+          const branchRes = await api('get_branches');
+          if(branchRes.ok) {
+            branchSelect.innerHTML = '<option value="">Select Branch</option>' + branchRes.branches.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+          }
+      });
 
-      new bootstrap.Modal(document.getElementById('addConsignmentModal')).show();
-  });
+      branchSelect.addEventListener('change', loadConsignmentProducts);
+      supplierSelect.addEventListener('change', loadConsignmentProducts);
+  }
 
   const addConsignmentForm = document.getElementById('addConsignmentForm');
   if (addConsignmentForm) {
@@ -861,6 +899,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Logs - UPDATED: clearer display
   function loadActionLogs(){ 
+    const downloadBtn = document.getElementById('downloadPdf');
+    if (downloadBtn) downloadBtn.style.display = 'block';
     const el = document.getElementById('logsContent'); 
     if(!el) return; 
     el.innerHTML = '<div class="text-center text-muted">Loading action logs...</div>';
@@ -1058,7 +1098,7 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
     if (!elem) return;
 
     elem.innerHTML = '';
-    let total = 0;
+    let subtotal = 0;
 
     const branch = document.getElementById('posBranchSelect') ? document.getElementById('posBranchSelect').value : '';
     api('get_products', { params: { q: '', branch_id: branch } }).then(res => {
@@ -1074,8 +1114,8 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
             const p = productsById[it.id];
             if (!p) return;
 
-            const line = Number(p.price) * it.qty; // Use base price for calculation, VAT is handled on server
-            total += line;
+            const line = Number(p.price) * it.qty; // price is pre-VAT
+            subtotal += line;
 
             elem.innerHTML += `
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1090,7 +1130,17 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
                 </div>`;
         });
 
-        document.getElementById('checkoutTotal').textContent = total.toFixed(2);
+        const discountPercent = parseFloat(document.getElementById('discountPercent').value) || 0;
+        const discountAmount = (subtotal * discountPercent) / 100;
+        const totalAfterDiscount = subtotal - discountAmount;
+        const vatAmount = totalAfterDiscount * 0.12;
+        const finalTotal = totalAfterDiscount + vatAmount;
+
+        document.getElementById('checkoutSubtotal').textContent = subtotal.toFixed(2);
+        document.getElementById('checkoutDiscount').textContent = discountAmount.toFixed(2);
+        document.getElementById('checkoutVat').textContent = vatAmount.toFixed(2);
+        document.getElementById('checkoutTotal').textContent = finalTotal.toFixed(2);
+
 
         elem.querySelectorAll('.cart-qty-plus').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1132,16 +1182,22 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
       new bootstrap.Modal(document.getElementById('checkoutModal')).show();
   });
 
+  document.getElementById('discountPercent')?.addEventListener('input', () => {
+    renderCart();
+  });
+
   // Checkout flow (floating cart) - Now with detailed receipt generation
   document.getElementById('confirmCheckout')?.addEventListener('click', ()=>{
     const pm = document.getElementById('paymentMode').value || 'Cash';
     const branch = document.getElementById('posBranchSelect') ? document.getElementById('posBranchSelect').value : '';
-    const payload = { items: CART, payment_mode: pm, branch_id: branch };
+    const discountPercent = parseFloat(document.getElementById('discountPercent').value) || 0;
+    const payload = { items: CART, payment_mode: pm, branch_id: branch, discount_percent: discountPercent };
     
     // Process the response to build a better receipt
     api('checkout',{ method:'POST', body: payload }).then(res=>{ // Using the robust API helper
       if(res.ok){
         CART = []; updateCartUI();
+        document.getElementById('discountPercent').value = '0';
         bootstrap.Modal.getInstance(document.getElementById('checkoutModal'))?.hide();
         
         // --- START RECEIPT GENERATION ---
@@ -1179,6 +1235,9 @@ document.getElementById('downloadPdf')?.addEventListener('click', () => {
         receiptText += "--------------------------------------\n";
         receiptText += `Vatable Sales:          ₱ ${Number(res.vatable_sales).toFixed(2).padStart(8)}\n`;
         receiptText += `VAT (12%):              ₱ ${Number(res.vat_amount).toFixed(2).padStart(8)}\n`;
+        if (res.discount > 0) {
+          receiptText += `Discount:               ₱ ${Number(res.discount).toFixed(2).padStart(8)}\n`;
+        }
         receiptText += `TOTAL:                  ₱ ${Number(res.total).toFixed(2).padStart(8)}\n`;
         receiptText += `PAYMENT MODE:           ${escapeHtml(res.payment_mode)}\n`;
         receiptText += "--------------------------------------\n";
@@ -1706,6 +1765,384 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
         loadInventory();
       });
     });
+
+    // Add click listener for the orders panel
+    const menuOrders = document.getElementById('menu-orders');
+    if (menuOrders) {
+        menuOrders.addEventListener('click', () => {
+            showPanel('orders');
+            loadOrders();
+        });
+    }
   });
 
+  // --- START: ORDERING SYSTEM SCRIPT (MOVED AND REFACTORED) ---
+
+  function populateDateFilters(yearFilter, monthFilter, weekFilter, loadCallback) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    // Populate years
+    let yearHtml = '';
+    for (let y = currentYear; y >= 2020; y--) {
+      yearHtml += `<option value="${y}">${y}</option>`;
+    }
+    yearFilter.innerHTML = yearHtml;
+
+    // Populate months
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    let monthHtml = '<option value="">All Months</option>';
+    for (let m = 1; m <= 12; m++) {
+      monthHtml += `<option value="${m}">${monthNames[m - 1]}</option>`;
+    }
+    monthFilter.innerHTML = monthHtml;
+    monthFilter.value = currentMonth; // Set current month as default
+
+    // Populate weeks
+    function populateWeeks(year, month) {
+        weekFilter.innerHTML = '<option value="">All Weeks</option>';
+        if (month) {
+            const firstDay = new Date(year, month - 1, 1);
+            const lastDay = new Date(year, month, 0);
+            let week = 1;
+            for (let d = 1; d <= lastDay.getDate(); d++) {
+                if (new Date(year, month - 1, d).getDay() === 0 || d === 1) {
+                    const weekStart = new Date(year, month - 1, d);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 6);
+                    const endDate = weekEnd > lastDay ? lastDay : weekEnd;
+                    weekFilter.innerHTML += `<option value="${d}">Week of ${weekStart.toLocaleDateString()} - ${endDate.toLocaleDateString()}</option>`;
+                    week++;
+                }
+            }
+        }
+    }
+
+    populateWeeks(currentYear, currentMonth);
+
+    yearFilter.addEventListener('change', () => {
+        populateWeeks(parseInt(yearFilter.value), parseInt(monthFilter.value));
+        loadCallback();
+    });
+    monthFilter.addEventListener('change', () => {
+        populateWeeks(parseInt(yearFilter.value), parseInt(monthFilter.value));
+        loadCallback();
+    });
+    weekFilter.addEventListener('change', loadCallback);
+  }
+
+  // Setup PO Filters
+  const poYearFilter = document.getElementById('poYearFilter');
+  const poMonthFilter = document.getElementById('poMonthFilter');
+  const poWeekFilter = document.getElementById('poWeekFilter');
+  if(poYearFilter && poMonthFilter && poWeekFilter) {
+    populateDateFilters(poYearFilter, poMonthFilter, poWeekFilter, loadOrders);
+  }
+
+  document.getElementById('downloadPoPdf')?.addEventListener('click', () => {
+    const year = poYearFilter.value;
+    const month = poMonthFilter.value;
+    const week = poWeekFilter.value;
+
+    api('get_orders', { params: { year, month, week } }).then(res => {
+      if (res.ok) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const title = 'Purchase Orders Report';
+        const headers = [['ID', 'Supplier', 'Date', 'Items', 'Status']];
+        
+        const body = res.orders.map(o => [
+            o.id,
+            o.supplier_name,
+            new Date(o.order_date).toLocaleDateString(),
+            o.items.map(it => `${it.quantity} x ${it.product_name} (${it.size.toUpperCase()})`).join('\n'),
+            o.status
+        ]);
+
+        doc.setFontSize(18);
+        doc.text(title, 14, 22);
+        doc.autoTable({
+            head: headers,
+            body: body,
+            startY: 30,
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [22, 160, 133] },
+        });
+
+        const filename = `purchase_orders_${new Date().toISOString().slice(0,10)}.pdf`;
+        doc.save(filename);
+      } else {
+        alert(res.error || 'Could not generate PDF.');
+      }
+    });
+  });
+
+  // Load and display purchase orders
+  async function loadOrders() {
+    const container = document.getElementById('ordersContent');
+    if (!container) return;
+    
+    const year = poYearFilter.value;
+    const month = poMonthFilter.value;
+    const week = poWeekFilter.value;
+
+    const res = await api('get_orders', { params: { year, month, week } });
+    if (!res.ok || !res.orders) {
+        container.innerHTML = '<div class="alert alert-danger">Could not load orders.</div>';
+        return;
+    }
+
+    if (res.orders.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted">No purchase orders found.</div>';
+        return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'table table-sm table-hover';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Supplier</th>
+                <th>Date</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${res.orders.map(order => `
+                <tr>
+                    <td>#${order.id}</td>
+                    <td>${escapeHtml(order.supplier_name)}</td>
+                    <td>${new Date(order.order_date).toLocaleDateString()}</td>
+                    <td>
+                        <ul class="list-unstyled mb-0 small">
+                        ${order.items.map(it => `<li>- ${it.quantity} x ${escapeHtml(it.product_name)} (${it.size.toUpperCase()})</li>`).join('')}
+                        </ul>
+                    </td>
+                    <td><span class="badge bg-${order.status === 'Placed' ? 'warning' : 'success'}">${order.status}</span></td>
+                    <td>
+                        ${order.status === 'Placed' ? `<button class="btn btn-success btn-sm receive-order-btn" data-id="${order.id}">Receive</button>` : ''}
+                        <a href="generate_po_pdf.php?order_id=${order.id}" target="_blank" class="btn btn-primary btn-sm">Download PDF</a>
+                    </td>
+                </tr>
+            `).join('')}
+        </tbody>
+    `;
+    container.innerHTML = '';
+    container.appendChild(table);
+
+    // Add event listeners for the receive buttons
+    container.querySelectorAll('.receive-order-btn').forEach(btn => {
+      btn.addEventListener('click', handleReceiveOrder);
+    });
+  }
+
+  // --- START: New Order Modal and Order Items Logic ---
+  const orderItems = [];
+  const createOrderModal = document.getElementById('createOrderModal');
+
+  function renderOrderItems() {
+      const container = document.getElementById('orderItemsList');
+      if (!container) return;
+
+      if (orderItems.length === 0) {
+          container.innerHTML = '<p class="text-muted">No items added to the order yet.</p>';
+          return;
+      }
+      container.innerHTML = `
+          <table class="table table-sm">
+              <thead><tr><th>Product</th><th>Size</th><th>Qty</th><th></th></tr></thead>
+              <tbody>
+                  ${orderItems.map((item, index) => `
+                      <tr>
+                          <td>${escapeHtml(item.product_name)}</td>
+                          <td>${item.size.toUpperCase()}</td>
+                          <td>${item.quantity}</td>
+                          <td><button type="button" class="btn btn-danger btn-sm remove-order-item-btn" data-index="${index}">X</button></td>
+                      </tr>
+                  `).join('')}
+              </tbody>
+          </table>
+      `;
+      // Add event listeners for remove buttons
+      container.querySelectorAll('.remove-order-item-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+              const indexToRemove = parseInt(btn.dataset.index);
+              removeOrderItem(indexToRemove);
+          });
+      });
+  }
+
+  function removeOrderItem(index) {
+      orderItems.splice(index, 1);
+      renderOrderItems();
+  }
+
+  if (createOrderModal) {
+      const branchSelect = document.getElementById('orderBranchSelect');
+      const supplierSelect = document.getElementById('orderSupplierSelect');
+      const productSelect = document.getElementById('orderProductSelect');
+
+      // Function to load products based on branch and supplier
+      const loadOrderProducts = async () => {
+          const branchId = branchSelect.value;
+          const supplierId = supplierSelect.value;
+
+          productSelect.disabled = true;
+          productSelect.innerHTML = '<option>Loading...</option>';
+
+          if (!branchId || !supplierId) {
+              productSelect.innerHTML = '<option>-- Select branch and supplier --</option>';
+              return;
+          }
+
+          const res = await api('get_products', { params: { branch_id: branchId, supplier_id: supplierId } });
+          if (res.ok && res.products) {
+              productSelect.innerHTML = '<option value="">-- Select a product --</option>';
+              res.products.forEach(p => {
+                  productSelect.innerHTML += `<option value="${p.id}" data-stocks='${JSON.stringify(p.stocks)}'>${escapeHtml(p.name)}</option>`;
+              });
+              productSelect.disabled = false;
+          } else {
+              productSelect.innerHTML = '<option>-- No products found --</option>';
+          }
+      };
+
+      // When the modal is shown, populate branches and reset state
+      createOrderModal.addEventListener('show.bs.modal', async () => {
+          orderItems.length = 0;
+          renderOrderItems();
+          document.getElementById('createOrderForm').reset();
+          
+          supplierSelect.disabled = true;
+          productSelect.disabled = true;
+          supplierSelect.innerHTML = '<option>-- Select a branch first --</option>';
+          productSelect.innerHTML = '<option>-- Select branch and supplier --</option>';
+
+          const res = await api('get_branches');
+          if (res.ok) {
+              branchSelect.innerHTML = '<option value="">-- Select a Branch --</option>' + res.branches.map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+          }
+      });
+
+      // When a branch is selected, populate suppliers
+      branchSelect.addEventListener('change', async () => {
+          const branchId = branchSelect.value;
+          supplierSelect.disabled = true;
+          supplierSelect.innerHTML = '<option>Loading...</option>';
+          
+          if (!branchId) {
+              supplierSelect.innerHTML = '<option>-- Select a branch first --</option>';
+              await loadOrderProducts();
+              return;
+          }
+
+          const res = await api('get_suppliers');
+          if (res.ok) {
+              supplierSelect.innerHTML = '<option value="">-- Select a Supplier --</option>' + res.suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+              supplierSelect.disabled = false;
+          }
+          await loadOrderProducts();
+      });
+
+      // When supplier changes, trigger product load
+      supplierSelect.addEventListener('change', loadOrderProducts);
+
+      // When a product is chosen, populate its available sizes
+      productSelect.addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        if (!selectedOption || !selectedOption.dataset.stocks) {
+          document.getElementById('orderProductSize').innerHTML = '<option value="os">OS</option>';
+          return;
+        }
+        const stocks = JSON.parse(selectedOption.dataset.stocks || '[]');
+        const sizeSelect = document.getElementById('orderProductSize');
+        sizeSelect.innerHTML = '';
+        if (stocks.length > 0) {
+            stocks.forEach(stock => {
+                sizeSelect.innerHTML += `<option value="${stock.size}">${stock.size.toUpperCase()}</option>`;
+            });
+        } else {
+            sizeSelect.innerHTML = '<option value="os">OS</option>';
+        }
+      });
+  }
+
+  // Logic for adding an item to the temporary order list
+  document.getElementById('addOrderItemBtn')?.addEventListener('click', () => {
+      const productSelect = document.getElementById('orderProductSelect');
+      const sizeSelect = document.getElementById('orderProductSize');
+      const quantityInput = document.getElementById('orderQuantity');
+
+      const productId = productSelect.value;
+      const productName = productSelect.options[productSelect.selectedIndex].text;
+      const size = sizeSelect.value;
+      const quantity = parseInt(quantityInput.value);
+
+      if (!productId || !size || !(quantity > 0)) {
+          alert('Please select a product, size, and a valid quantity.');
+          return;
+      }
+
+      orderItems.push({ product_id: productId, product_name: productName, size, quantity });
+      renderOrderItems();
+      quantityInput.value = '1';
+  });
+
+  // Handle submitting the final order
+  document.getElementById('createOrderForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const supplierId = document.getElementById('orderSupplierSelect').value;
+      if (!supplierId || orderItems.length === 0) {
+          alert('Please select a supplier and add items to the order.');
+          return;
+      }
+
+      const response = await fetch('create_order.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ supplier_id: supplierId, items: orderItems })
+      });
+      const data = await response.json();
+
+      if (data.status === 'success') {
+          alert('Order created successfully!');
+          bootstrap.Modal.getInstance(document.getElementById('createOrderModal'))?.hide();
+          loadOrders();
+      } else {
+          alert('Error: ' + data.message);
+      }
+  });
+  
+  // --- END: New Order Modal and Order Items Logic ---
+  
+  // Handle receiving an order (event handler function)
+  async function handleReceiveOrder(e) {
+      const orderId = e.target.dataset.id;
+      if (!confirm(`Are you sure you want to mark Order #${orderId} as received? This will add the items to your inventory.`)) {
+          return;
+      }
+
+      const response = await fetch('receive_order.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderId })
+      });
+      const data = await response.json();
+
+      if (data.status === 'success') {
+          alert(data.message || 'Order received successfully.');
+          loadOrders();
+          loadInventory();
+      } else {
+          alert('Error: ' + (data.message || 'Could not process order reception.'));
+      }
+  }
+
+  // --- END: ORDERING SYSTEM SCRIPT ---
 });
