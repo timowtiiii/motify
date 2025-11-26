@@ -1423,42 +1423,6 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
             return; // Stop further execution for staff
         }
 
-        const salesToday = formatCurrency(res.sales_today);
-        const salesYesterday = formatCurrency(res.sales_yesterday);
-        const salesThisMonth = formatCurrency(res.sales_this_month);
-        const salesLastMonth = formatCurrency(res.sales_last_month);
-        const totalSales = formatCurrency(res.total_sales);
-
-        const compareSales = (current, previous) => {
-            const currentNum = Number(current);
-            const previousNum = Number(previous);
-            let percentageText = '';
-            let arrow = '';
-            let color = 'text-muted';
-            
-            if (previousNum === 0) {
-                if (currentNum > 0) {
-                    arrow = '<i class="fas fa-arrow-up"></i>';
-                    color = 'text-success';
-                }
-            } else {
-                const percentageChange = ((currentNum - previousNum) / previousNum) * 100;
-                if (percentageChange > 0) {
-                    arrow = '<i class="fas fa-arrow-up"></i>';
-                    color = 'text-success';
-                    percentageText = `${percentageChange.toFixed(1)}%`;
-                } else if (percentageChange < 0) {
-                    arrow = '<i class="fas fa-arrow-down"></i>';
-                    color = 'text-danger';
-                    percentageText = `${Math.abs(percentageChange).toFixed(1)}%`;
-                }
-            }
-            return `<span class="${color}">${arrow} ${percentageText}</span>`;
-        };
-
-        const trendTodayYesterday = compareSales(salesToday, salesYesterday);
-        const trendThisMonthLastMonth = compareSales(salesThisMonth, salesLastMonth);
-
         container.innerHTML = `
             ${res.low_stocks.length > 0 ? `
             <div class="col-12 mb-3">
@@ -1473,53 +1437,7 @@ document.getElementById('printReceiptButton')?.addEventListener('click', () => {
                     </div>
                 </div>
             </div>` : ''}
-            <div class="col-lg-4 col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-subtitle mb-2 text-muted">Sales Today</h6>
-                        <h2 class="card-title">₱${salesToday}</h2>
-                        <p class="card-text">
-                            ${trendTodayYesterday} vs yesterday (₱${salesYesterday})
-                        </p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-subtitle mb-2 text-muted">Sales This Month</h6>
-                        <h2 class="card-title">₱${salesThisMonth}</h2>
-                        <p class="card-text">
-                            ${trendThisMonthLastMonth} vs last month (₱${salesLastMonth})
-                        </p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-subtitle mb-2 text-muted">Total Sales</h6>
-                        <h2 class="card-title">₱${totalSales}</h2>
-                        <p class="card-text text-muted">All-time revenue</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6 mb-3">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h6 class="card-subtitle mb-2 text-muted">Sales per Branch</h6>
-                        ${res.sales_per_branch.length > 0 
-                            ? `<ul class="list-group list-group-flush" style="max-height: 250px; overflow-y: auto;">${res.sales_per_branch.map(item => 
-                                `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
-                                    ${escapeHtml(item.name)}
-                                    <span class="fw-bold">₱${Number(item.total_sales).toFixed(2)}</span>
-                                </li>`).join('')}</ul>`
-                            : '<p class="text-muted mb-0">No sales data available per branch.</p>'
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6 mb-3">
+            <div class="col-lg-12 mb-3">
                 <div class="card h-100">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">Sales Trend per Branch (Last 30 Days)</h6>
